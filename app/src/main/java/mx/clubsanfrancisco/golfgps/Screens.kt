@@ -1,6 +1,7 @@
 package mx.clubsanfrancisco.golfgps
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -44,7 +45,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -99,14 +103,20 @@ private fun RangeScreen(vm: GolfViewModel, onRequestPermission: () -> Unit) {
     val hole = vm.currentHole
     val distM = vm.distanceToGreenMeters()
     val yards = vm.units == Units.YARDS
+    val haptics = LocalHapticFeedback.current
 
-    val distValue: Int? = distM?.let {
+    // Pin position shifts the target ~8 yd forward (red) or back (blue)
+    val flag = vm.flags[vm.currentHoleIndex]
+    val flagOffsetM = when (flag) { 0 -> -7.3152; 2 -> 7.3152; else -> 0.0 }
+    val distAdjM = distM?.plus(flagOffsetM)?.coerceAtLeast(0.0)
+
+    val distValue: Int? = distAdjM?.let {
         if (yards) metersToYards(it).roundToInt() else it.roundToInt()
     }
     val unitShort = if (yards) "yd" else "m"
     val refDist = if (yards) metersToYards(hole.referenceMeters).roundToInt()
                   else hole.referenceMeters.roundToInt()
-    val clubYards = distM?.let { metersToYards(it) }
+    val clubYards = distAdjM?.let { metersToYards(it) }
 
     LazyColumn(
         modifier = Modifier
@@ -137,6 +147,30 @@ private fun RangeScreen(vm: GolfViewModel, onRequestPermission: () -> Unit) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            Spacer(Modifier.height(6.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "PIN",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.width(8.dp))
+                PinDot(Color(0xFFE85D4A), flag == 0) { vm.setFlagRotation(vm.currentHoleIndex, 0) }
+                Spacer(Modifier.width(8.dp))
+                PinDot(Color(0xFFF4F1E8), flag == 1) { vm.setFlagRotation(vm.currentHoleIndex, 1) }
+                Spacer(Modifier.width(8.dp))
+                PinDot(Color(0xFF5AB0FF), flag == 2) { vm.setFlagRotation(vm.currentHoleIndex, 2) }
+                if (flag >= 0) {
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        "✕ clear",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.clickable { vm.clearFlags() }
+                    )
+                }
+            }
 
             Spacer(Modifier.height(6.dp))
 
@@ -168,9 +202,18 @@ private fun RangeScreen(vm: GolfViewModel, onRequestPermission: () -> Unit) {
                     )
                 }
                 Text(
-                    "to center of green",
+                    when (flag) {
+                        0 -> "to RED pin (front)"
+                        1 -> "to WHITE pin (middle)"
+                        2 -> "to BLUE pin (back)"
+                        else -> "to center of green"
+                    },
                     style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = when (flag) {
+                        0 -> Color(0xFFE85D4A)
+                        2 -> Color(0xFF5AB0FF)
+                        else -> MaterialTheme.colorScheme.primary
+                    },
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
@@ -284,7 +327,10 @@ private fun RangeScreen(vm: GolfViewModel, onRequestPermission: () -> Unit) {
                 name = player.name,
                 strokes = player.strokes[vm.currentHoleIndex],
                 par = hole.par,
-                onAdd = { vm.addStroke(i) },
+                onAdd = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    vm.addStroke(i)
+                },
                 onRemove = { vm.removeStroke(i) }
             )
             Spacer(Modifier.height(8.dp))
@@ -292,6 +338,23 @@ private fun RangeScreen(vm: GolfViewModel, onRequestPermission: () -> Unit) {
 
         item { Spacer(Modifier.height(16.dp)) }
     }
+}
+
+@Composable
+private fun PinDot(color: Color, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .size(26.dp)
+            .clip(CircleShape)
+            .background(color)
+            .border(
+                width = if (selected) 3.dp else 1.dp,
+                color = if (selected) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.outline,
+                shape = CircleShape
+            )
+            .clickable(onClick = onClick)
+    )
 }
 
 @Composable

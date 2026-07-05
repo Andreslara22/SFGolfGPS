@@ -64,6 +64,11 @@ class GolfViewModel(app: Application) : AndroidViewModel(app) {
     val players = mutableStateListOf<Player>()
     var activePlayerIndex by mutableStateOf(0)
 
+    // --- Pin position per hole: -1 none · 0 red (front) · 1 white (mid) · 2 blue (back) ---
+    // Club rule: flags rotate red -> white -> blue hole after hole, so picking
+    // one hole's flag determines the entire course.
+    val flags = mutableStateListOf<Int>().apply { repeat(18) { add(-1) } }
+
     // --- Round history ---
     val history = mutableStateListOf<SavedRound>()
 
@@ -156,6 +161,18 @@ class GolfViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun setFlagRotation(holeIdx: Int, color: Int) {
+        for (i in 0 until 18) {
+            flags[i] = (((color + (i - holeIdx)) % 3) + 3) % 3
+        }
+        saveState()
+    }
+
+    fun clearFlags() {
+        for (i in 0 until 18) flags[i] = -1
+        saveState()
+    }
+
     fun adjustClub(playerIdx: Int, clubIdx: Int, delta: Int) {
         if (playerIdx in players.indices && clubIdx in clubNames.indices) {
             val p = players[playerIdx]
@@ -191,6 +208,7 @@ class GolfViewModel(app: Application) : AndroidViewModel(app) {
             while (history.size > 30) history.removeAt(history.size - 1)
         }
         players.forEach { p -> for (i in 0 until 18) p.strokes[i] = 0 }
+        for (i in 0 until 18) flags[i] = -1
         currentHoleIndex = 0
         autoDetect = false
         saveState()
@@ -199,6 +217,7 @@ class GolfViewModel(app: Application) : AndroidViewModel(app) {
     /** Clears current strokes without saving to history. */
     fun clearStrokes() {
         players.forEach { p -> for (i in 0 until 18) p.strokes[i] = 0 }
+        for (i in 0 until 18) flags[i] = -1
         currentHoleIndex = 0
         saveState()
     }
@@ -229,6 +248,7 @@ class GolfViewModel(app: Application) : AndroidViewModel(app) {
             .putString("names", players.joinToString("|") { it.name })
             .putString("scores", players.joinToString("|") { p -> p.strokes.joinToString(",") })
             .putString("clubs", players.joinToString("|") { p -> p.clubYards.joinToString(",") })
+            .putString("flags", flags.joinToString(","))
             .putString("units", units.name)
             .putString("theme", themeMode.name)
             .putString("history", historyJson.toString())
@@ -238,6 +258,10 @@ class GolfViewModel(app: Application) : AndroidViewModel(app) {
     private fun loadState() {
         units = runCatching { Units.valueOf(prefs.getString("units", "YARDS")!!) }.getOrDefault(Units.YARDS)
         themeMode = runCatching { ThemeMode.valueOf(prefs.getString("theme", "SYSTEM")!!) }.getOrDefault(ThemeMode.SYSTEM)
+
+        prefs.getString("flags", null)?.split(",")?.mapNotNull { it.toIntOrNull() }
+            ?.takeIf { it.size == 18 }
+            ?.forEachIndexed { i, v -> flags[i] = v }
 
         runCatching {
             val arr = JSONArray(prefs.getString("history", "[]"))
