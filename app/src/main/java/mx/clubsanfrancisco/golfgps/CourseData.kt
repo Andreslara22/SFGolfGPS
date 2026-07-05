@@ -82,3 +82,47 @@ fun recommendedClub(yards: Double): String = when {
     yards >= 40 -> "Lob Wedge / Approach"
     else -> "Chip / Putter"
 }
+
+// ---------------------------------------------------------------- Mapa por hoyo
+
+/** t: posición 0..1 del tee al green · side: -1 izquierda, +1 derecha · size: escala relativa */
+class Bunker(val t: Float, val side: Float, val size: Float = 1f)
+class Water(val t: Float, val side: Float, val w: Float, val h: Float)
+
+/** dogleg: curvatura del fairway (-1 izquierda fuerte ... +1 derecha fuerte) */
+class HoleFeatures(
+    val dogleg: Float,
+    val bunkers: List<Bunker>,
+    val water: Water? = null,
+    val trees: Int = 4
+)
+
+// Trazado por hoyo basado en imagen satelital del club (jul 2026).
+// Agua confirmada: green del 3, lago del 9 (izq) / 18 (der),
+// circuito norte 12-13, lago sur junto al green del 15.
+val holeFeatures: Map<Int, HoleFeatures> = mapOf(
+    1 to HoleFeatures(0.10f, listOf(Bunker(0.88f, -1f), Bunker(0.90f, 1f, 0.8f)), trees = 4),
+    2 to HoleFeatures(0f, listOf(Bunker(0.84f, 1f)), trees = 3),
+    3 to HoleFeatures(-0.15f, listOf(Bunker(0.90f, 1f, 0.9f)),
+        water = Water(0.78f, -1f, 1.3f, 1.1f), trees = 4),
+    4 to HoleFeatures(0.30f, listOf(Bunker(0.45f, -1f), Bunker(0.90f, 1f, 0.8f)), trees = 6),
+    5 to HoleFeatures(-0.10f, listOf(Bunker(0.50f, 1f), Bunker(0.88f, -1f, 0.9f)), trees = 4),
+    6 to HoleFeatures(0.05f, listOf(Bunker(0.85f, -1f), Bunker(0.88f, 1f, 0.8f)), trees = 5),
+    7 to HoleFeatures(0f, listOf(Bunker(0.82f, -1f), Bunker(0.85f, 1f)), trees = 3),
+    8 to HoleFeatures(0.20f, listOf(Bunker(0.90f, -1f)), trees = 4),
+    9 to HoleFeatures(-0.10f, listOf(Bunker(0.90f, 1f, 0.9f)),
+        water = Water(0.55f, -1f, 1.8f, 1.4f), trees = 5),
+    10 to HoleFeatures(0f, listOf(Bunker(0.85f, 1f)), trees = 3),
+    11 to HoleFeatures(0.05f, listOf(Bunker(0.55f, 1f), Bunker(0.90f, -1f)), trees = 5),
+    12 to HoleFeatures(0.35f, listOf(Bunker(0.70f, 1f), Bunker(0.90f, -1f, 0.8f)),
+        water = Water(0.40f, -1f, 1.5f, 1.2f), trees = 6),
+    13 to HoleFeatures(-0.30f, listOf(Bunker(0.88f, 1f)),
+        water = Water(0.50f, 1f, 1.1f, 0.9f), trees = 5),
+    14 to HoleFeatures(0f, listOf(Bunker(0.83f, -1f), Bunker(0.86f, 1f, 0.9f)), trees = 3),
+    15 to HoleFeatures(0.05f, listOf(Bunker(0.60f, -1f)),
+        water = Water(0.88f, 1f, 1.5f, 1.2f), trees = 4),
+    16 to HoleFeatures(0.15f, listOf(Bunker(0.88f, -1f)), trees = 5),
+    17 to HoleFeatures(-0.15f, listOf(Bunker(0.60f, 1f), Bunker(0.90f, -1f, 0.9f)), trees = 4),
+    18 to HoleFeatures(0.25f, listOf(Bunker(0.45f, -1f), Bunker(0.90f, -1f)),
+        water = Water(0.55f, 1f, 1.7f, 1.3f), trees = 6)
+)
