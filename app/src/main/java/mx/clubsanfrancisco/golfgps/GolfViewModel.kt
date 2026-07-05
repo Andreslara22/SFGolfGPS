@@ -13,9 +13,14 @@ import org.json.JSONObject
 enum class Units { YARDS, METERS }
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 
-class Player(name: String, strokes: List<Int> = List(18) { 0 }) {
+class Player(
+    name: String,
+    strokes: List<Int> = List(18) { 0 },
+    clubs: List<Int> = defaultClubYards
+) {
     var name by mutableStateOf(name)
     val strokes = mutableStateListOf<Int>().apply { addAll(strokes) }
+    val clubYards = mutableStateListOf<Int>().apply { addAll(clubs) }
 
     fun total(): Int = strokes.sum()
 
@@ -57,6 +62,7 @@ class GolfViewModel(app: Application) : AndroidViewModel(app) {
 
     // --- Players (max 5) ---
     val players = mutableStateListOf<Player>()
+    var activePlayerIndex by mutableStateOf(0)
 
     // --- Round history ---
     val history = mutableStateListOf<SavedRound>()
@@ -145,6 +151,23 @@ class GolfViewModel(app: Application) : AndroidViewModel(app) {
     fun removePlayer(index: Int) {
         if (players.size > 1 && index in players.indices) {
             players.removeAt(index)
+            if (activePlayerIndex >= players.size) activePlayerIndex = players.size - 1
+            saveState()
+        }
+    }
+
+    fun adjustClub(playerIdx: Int, clubIdx: Int, delta: Int) {
+        if (playerIdx in players.indices && clubIdx in clubNames.indices) {
+            val p = players[playerIdx]
+            p.clubYards[clubIdx] = (p.clubYards[clubIdx] + delta).coerceIn(30, 350)
+            saveState()
+        }
+    }
+
+    fun resetClubs(playerIdx: Int) {
+        if (playerIdx in players.indices) {
+            val p = players[playerIdx]
+            defaultClubYards.forEachIndexed { i, v -> p.clubYards[i] = v }
             saveState()
         }
     }
@@ -205,6 +228,7 @@ class GolfViewModel(app: Application) : AndroidViewModel(app) {
         prefs.edit()
             .putString("names", players.joinToString("|") { it.name })
             .putString("scores", players.joinToString("|") { p -> p.strokes.joinToString(",") })
+            .putString("clubs", players.joinToString("|") { p -> p.clubYards.joinToString(",") })
             .putString("units", units.name)
             .putString("theme", themeMode.name)
             .putString("history", historyJson.toString())
@@ -230,13 +254,19 @@ class GolfViewModel(app: Application) : AndroidViewModel(app) {
 
         val names = prefs.getString("names", null)?.split("|")?.filter { it.isNotBlank() } ?: return
         val scores = prefs.getString("scores", null)?.split("|") ?: return
+        val clubs = prefs.getString("clubs", null)?.split("|")
         names.forEachIndexed { i, name ->
             val strokes = scores.getOrNull(i)
                 ?.split(",")
                 ?.mapNotNull { it.toIntOrNull() }
                 ?.takeIf { it.size == 18 }
                 ?: List(18) { 0 }
-            if (players.size < 5) players.add(Player(name, strokes))
+            val clubList = clubs?.getOrNull(i)
+                ?.split(",")
+                ?.mapNotNull { it.toIntOrNull() }
+                ?.takeIf { it.size == clubNames.size }
+                ?: defaultClubYards
+            if (players.size < 5) players.add(Player(name, strokes, clubList))
         }
     }
 }

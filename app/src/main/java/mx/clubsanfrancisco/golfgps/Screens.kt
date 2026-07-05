@@ -1,6 +1,7 @@
 package mx.clubsanfrancisco.golfgps
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -182,6 +183,7 @@ private fun RangeScreen(vm: GolfViewModel, onRequestPermission: () -> Unit) {
 
             Spacer(Modifier.height(14.dp))
 
+            val activeP = vm.players.getOrNull(vm.activePlayerIndex) ?: vm.players.first()
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(20.dp),
@@ -189,24 +191,36 @@ private fun RangeScreen(vm: GolfViewModel, onRequestPermission: () -> Unit) {
                     containerColor = MaterialTheme.colorScheme.surfaceVariant
                 )
             ) {
-                Row(
-                    Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("🏌️", fontSize = 30.sp)
-                    Spacer(Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            "SUGGESTED CLUB",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            clubYards?.let { recommendedClub(it) } ?: "Waiting for GPS",
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                Column(Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("🏌️", fontSize = 30.sp)
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                "SUGGESTED CLUB · ${activeP.name.uppercase().take(12)}",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                clubYards?.let { clubForDistance(it, activeP.clubYards) } ?: "Waiting for GPS",
+                                style = MaterialTheme.typography.headlineSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                    if (vm.players.size > 1) {
+                        Spacer(Modifier.height(8.dp))
+                        Row(
+                            Modifier.horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            vm.players.forEachIndexed { i, p ->
+                                MiniChip(p.name.take(8), i == vm.activePlayerIndex) {
+                                    vm.activePlayerIndex = i
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -372,21 +386,44 @@ private fun ScorecardScreen(vm: GolfViewModel) {
                 }
             }
             Spacer(Modifier.height(12.dp))
-            HeaderRow(vm)
-            Divider()
-        }
-        items(CourseData.holes) { hole ->
-            HoleRow(vm, hole)
-            if (hole.number == 9) {
-                TotalsRow(vm, "OUT", 0 until 9)
-                Divider()
+            Card(
+                Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column {
+                    Box(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.primaryContainer)) {
+                        HeaderRow(vm)
+                    }
+                    CourseData.holes.forEach { hole ->
+                        HoleRow(vm, hole)
+                        if (hole.number == 9) {
+                            Box(Modifier.fillMaxWidth().background(
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))) {
+                                TotalsRow(vm, "OUT", 0 until 9)
+                            }
+                        }
+                    }
+                    Box(Modifier.fillMaxWidth().background(
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))) {
+                        TotalsRow(vm, "IN", 9 until 18)
+                    }
+                    Box(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.primaryContainer)) {
+                        Column {
+                            TotalsRow(vm, "TOTAL", 0 until 18, bold = true)
+                            RelativeRow(vm)
+                        }
+                    }
+                }
             }
-        }
-        item {
-            TotalsRow(vm, "IN", 9 until 18)
-            Divider(thickness = 2.dp)
-            TotalsRow(vm, "TOTAL", 0 until 18, bold = true)
-            RelativeRow(vm)
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "⭕ under par · ⬜ over par",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center
+            )
             Spacer(Modifier.height(14.dp))
 
             Button(
@@ -511,7 +548,7 @@ private fun RoundHistoryCard(round: SavedRound, fmt: SimpleDateFormat, onDelete:
 
 @Composable
 private fun HeaderRow(vm: GolfViewModel) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 9.dp)) {
         Text("Hole", Modifier.width(46.dp), fontWeight = FontWeight.Bold, fontSize = 13.sp)
         Text("Par", Modifier.width(36.dp), fontWeight = FontWeight.Bold, fontSize = 13.sp, textAlign = TextAlign.Center)
         vm.players.forEach { p ->
@@ -530,14 +567,18 @@ private fun HeaderRow(vm: GolfViewModel) {
 @Composable
 private fun HoleRow(vm: GolfViewModel, hole: Hole) {
     val isCurrent = vm.currentHoleIndex == hole.number - 1
+    val stripe = hole.number % 2 == 0
     Row(
         Modifier
             .fillMaxWidth()
             .background(
-                if (isCurrent) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
-                else Color.Transparent
+                when {
+                    isCurrent -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                    stripe -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f)
+                    else -> Color.Transparent
+                }
             )
-            .padding(vertical = 7.dp),
+            .padding(horizontal = 10.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
@@ -549,21 +590,43 @@ private fun HoleRow(vm: GolfViewModel, hole: Hole) {
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         vm.players.forEach { p ->
             val s = p.strokes[hole.number - 1]
-            Text(
-                if (s > 0) s.toString() else "·",
-                Modifier.weight(1f),
-                textAlign = TextAlign.Center,
-                fontWeight = FontWeight.SemiBold,
-                color = if (s > 0) scoreColor(s - hole.par) else MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                ScoreCell(s, hole.par)
+            }
         }
+    }
+}
+
+@Composable
+private fun ScoreCell(strokes: Int, par: Int) {
+    if (strokes <= 0) {
+        Text("·", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        return
+    }
+    val diff = strokes - par
+    val shape = if (diff < 0) CircleShape else RoundedCornerShape(5.dp)
+    val frame = when {
+        diff < 0 -> MaterialTheme.colorScheme.primary
+        diff > 0 -> MaterialTheme.colorScheme.error
+        else -> Color.Transparent
+    }
+    Box(
+        Modifier.size(27.dp).border(1.6.dp, frame, shape),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            strokes.toString(),
+            fontWeight = FontWeight.Bold,
+            fontSize = 14.sp,
+            color = scoreColor(diff)
+        )
     }
 }
 
 @Composable
 private fun TotalsRow(vm: GolfViewModel, label: String, range: IntRange, bold: Boolean = false) {
     val parSum = range.sumOf { CourseData.holes[it].par }
-    Row(Modifier.fillMaxWidth().padding(vertical = 7.dp)) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp)) {
         Text(label, Modifier.width(46.dp), fontWeight = FontWeight.Bold, fontSize = 13.sp)
         Text(parSum.toString(), Modifier.width(36.dp), textAlign = TextAlign.Center,
             fontWeight = FontWeight.Bold, fontSize = 13.sp)
@@ -581,7 +644,7 @@ private fun TotalsRow(vm: GolfViewModel, label: String, range: IntRange, bold: B
 
 @Composable
 private fun RelativeRow(vm: GolfViewModel) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 7.dp)) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp)) {
         Text("vs Par", Modifier.width(82.dp), fontWeight = FontWeight.Bold, fontSize = 13.sp)
         vm.players.forEach { p ->
             val rel = p.relativeToPar()
@@ -694,6 +757,65 @@ private fun SettingsScreen(vm: GolfViewModel) {
             }
 
             Spacer(Modifier.height(22.dp))
+            Text("Club distances (yd)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(
+                "Used for the suggested club, per player",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(
+                Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                vm.players.forEachIndexed { i, p ->
+                    MiniChip(p.name.take(8), i == vm.activePlayerIndex) {
+                        vm.activePlayerIndex = i
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            val cp = vm.players.getOrNull(vm.activePlayerIndex) ?: vm.players.first()
+            Card(
+                Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(Modifier.padding(horizontal = 14.dp, vertical = 6.dp)) {
+                    clubNames.forEachIndexed { ci, clubName ->
+                        Row(
+                            Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(clubName, Modifier.weight(1f), fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                            OutlinedButton(
+                                onClick = { vm.adjustClub(vm.activePlayerIndex, ci, -5) },
+                                shape = CircleShape,
+                                contentPadding = PaddingValues(0.dp),
+                                modifier = Modifier.size(36.dp)
+                            ) { Text("−") }
+                            Text(
+                                "${cp.clubYards[ci]}",
+                                Modifier.width(52.dp),
+                                textAlign = TextAlign.Center,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp
+                            )
+                            OutlinedButton(
+                                onClick = { vm.adjustClub(vm.activePlayerIndex, ci, 5) },
+                                shape = CircleShape,
+                                contentPadding = PaddingValues(0.dp),
+                                modifier = Modifier.size(36.dp)
+                            ) { Text("+") }
+                        }
+                    }
+                    TextButton(onClick = { vm.resetClubs(vm.activePlayerIndex) }) {
+                        Text("Reset to defaults")
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(22.dp))
             Text("Round", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(8.dp))
             Button(
@@ -739,6 +861,22 @@ private fun SettingsScreen(vm: GolfViewModel) {
             }
         )
     }
+}
+
+@Composable
+fun MiniChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    val bg = if (selected) MaterialTheme.colorScheme.primary
+             else MaterialTheme.colorScheme.surface
+    val fg = if (selected) MaterialTheme.colorScheme.onPrimary
+             else MaterialTheme.colorScheme.onSurface
+    TextButton(
+        onClick = onClick,
+        shape = RoundedCornerShape(50),
+        colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+            containerColor = bg, contentColor = fg
+        ),
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 2.dp)
+    ) { Text(label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1) }
 }
 
 @Composable

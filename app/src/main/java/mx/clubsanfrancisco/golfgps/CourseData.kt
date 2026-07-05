@@ -126,3 +126,21 @@ val holeFeatures: Map<Int, HoleFeatures> = mapOf(
     18 to HoleFeatures(0.25f, listOf(Bunker(0.45f, -1f), Bunker(0.90f, -1f)),
         water = Water(0.55f, 1f, 1.7f, 1.3f), trees = 6)
 )
+
+// ---------------------------------------------------------------- Palos por jugador
+
+val clubNames = listOf(
+    "Driver", "3 Wood", "5 Wood", "Hybrid", "4 Iron", "5 Iron", "6 Iron",
+    "7 Iron", "8 Iron", "9 Iron", "PW", "GW", "SW", "LW"
+)
+val defaultClubYards = listOf(230, 215, 200, 190, 185, 175, 165, 155, 145, 135, 120, 105, 90, 75)
+
+/** El palo más corto cuyo alcance cubre la distancia. */
+fun clubForDistance(yards: Double, dist: List<Int>): String {
+    if (dist.size != clubNames.size) return recommendedClub(yards)
+    if (yards < dist.last() * 0.55) return "Chip / Putter"
+    for (i in dist.indices.reversed()) {
+        if (dist[i] >= yards) return clubNames[i]
+    }
+    return clubNames[0]
+}
