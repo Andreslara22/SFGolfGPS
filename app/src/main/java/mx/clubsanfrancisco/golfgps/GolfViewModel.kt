@@ -7,6 +7,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.lifecycle.AndroidViewModel
+import org.json.JSONArray
+import org.json.JSONObject
 
 enum class Units { YARDS, METERS }
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
@@ -17,7 +19,7 @@ class Player(name: String, strokes: List<Int> = List(18) { 0 }) {
 
     fun total(): Int = strokes.sum()
 
-    /** Diferencial vs par contando solo hoyos con golpes anotados. */
+    /** Score vs par counting only holes with recorded strokes. */
     fun relativeToPar(): Int {
         var rel = 0
         strokes.forEachIndexed { i, s ->
@@ -29,31 +31,43 @@ class Player(name: String, strokes: List<Int> = List(18) { 0 }) {
     fun playedHoles(): Int = strokes.count { it > 0 }
 }
 
+class SavedRound(
+    val date: Long,
+    val entries: List<Entry>
+) {
+    class Entry(val name: String, val strokes: Int, val relative: Int, val holes: Int)
+}
+
+/** Auto hole switching only engages within this distance of a tee (meters). */
+private const val AUTO_DETECT_RADIUS_M = 150.0
+
 class GolfViewModel(app: Application) : AndroidViewModel(app) {
 
     private val prefs = app.getSharedPreferences("sfgolf", Context.MODE_PRIVATE)
 
-    // --- Ubicación GPS ---
+    // --- GPS ---
     var userLat by mutableStateOf<Double?>(null); private set
     var userLng by mutableStateOf<Double?>(null); private set
     var gpsAccuracyM by mutableStateOf<Float?>(null); private set
     var hasLocationPermission by mutableStateOf(false)
 
-    // --- Hoyo actual ---
+    // --- Current hole (always starts at hole 1) ---
     var currentHoleIndex by mutableStateOf(0); private set
-    var autoDetect by mutableStateOf(true); private set
+    var autoDetect by mutableStateOf(false); private set
 
-    // --- Jugadores (máx. 5) ---
+    // --- Players (max 5) ---
     val players = mutableStateListOf<Player>()
-    var activePlayerIndex by mutableStateOf(0)
 
-    // --- Ajustes ---
+    // --- Round history ---
+    val history = mutableStateListOf<SavedRound>()
+
+    // --- Settings ---
     var units by mutableStateOf(Units.YARDS)
     var themeMode by mutableStateOf(ThemeMode.SYSTEM)
 
     init {
         loadState()
-        if (players.isEmpty()) players.add(Player("Jugador 1"))
+        if (players.isEmpty()) players.add(Player("Player 1"))
     }
 
     val currentHole: Hole get() = CourseData.holes[currentHoleIndex]
@@ -64,11 +78,15 @@ class GolfViewModel(app: Application) : AndroidViewModel(app) {
         gpsAccuracyM = accuracy
         if (autoDetect) {
             val nearest = CourseData.nearestHoleByTee(lat, lng)
-            currentHoleIndex = nearest.number - 1
+            val dist = haversineMeters(lat, lng, nearest.teeLat, nearest.teeLng)
+            // Only switch when actually standing near a tee — prevents jumping
+            // around when you're away from the course.
+            if (dist <= AUTO_DETECT_RADIUS_M) {
+                currentHoleIndex = nearest.number - 1
+            }
         }
     }
 
-    /** Distancia actual al centro del green, en metros, o null sin GPS. */
     fun distanceToGreenMeters(): Double? {
         val lat = userLat ?: return null
         val lng = userLng ?: return null
@@ -86,16 +104,20 @@ class GolfViewModel(app: Application) : AndroidViewModel(app) {
         currentHoleIndex = (currentHoleIndex + 17) % 18
     }
 
-    fun enableAutoDetect() {
-        autoDetect = true
-        val lat = userLat
-        val lng = userLng
-        if (lat != null && lng != null) {
-            currentHoleIndex = CourseData.nearestHoleByTee(lat, lng).number - 1
+    fun toggleAutoDetect() {
+        autoDetect = !autoDetect
+        if (autoDetect) {
+            val lat = userLat
+            val lng = userLng
+            if (lat != null && lng != null) {
+                val nearest = CourseData.nearestHoleByTee(lat, lng)
+                val dist = haversineMeters(lat, lng, nearest.teeLat, nearest.teeLng)
+                if (dist <= AUTO_DETECT_RADIUS_M) currentHoleIndex = nearest.number - 1
+            }
         }
     }
 
-    // --- Golpes ---
+    // --- Strokes ---
     fun addStroke(playerIdx: Int, holeIdx: Int = currentHoleIndex) {
         if (playerIdx in players.indices) {
             val p = players[playerIdx]
@@ -112,10 +134,10 @@ class GolfViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // --- Jugadores ---
+    // --- Players ---
     fun addPlayer() {
         if (players.size < 5) {
-            players.add(Player("Jugador ${players.size + 1}"))
+            players.add(Player("Player ${players.size + 1}"))
             saveState()
         }
     }
@@ -123,7 +145,6 @@ class GolfViewModel(app: Application) : AndroidViewModel(app) {
     fun removePlayer(index: Int) {
         if (players.size > 1 && index in players.indices) {
             players.removeAt(index)
-            if (activePlayerIndex >= players.size) activePlayerIndex = players.size - 1
             saveState()
         }
     }
@@ -135,27 +156,78 @@ class GolfViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun resetRound() {
+    /** Saves the current round to history (if any strokes) and starts fresh at hole 1. */
+    fun finishRound() {
+        if (players.any { it.total() > 0 }) {
+            history.add(0, SavedRound(
+                date = System.currentTimeMillis(),
+                entries = players.map {
+                    SavedRound.Entry(it.name, it.total(), it.relativeToPar(), it.playedHoles())
+                }
+            ))
+            while (history.size > 30) history.removeAt(history.size - 1)
+        }
         players.forEach { p -> for (i in 0 until 18) p.strokes[i] = 0 }
+        currentHoleIndex = 0
+        autoDetect = false
         saveState()
+    }
+
+    /** Clears current strokes without saving to history. */
+    fun clearStrokes() {
+        players.forEach { p -> for (i in 0 until 18) p.strokes[i] = 0 }
+        currentHoleIndex = 0
+        saveState()
+    }
+
+    fun deleteRound(index: Int) {
+        if (index in history.indices) {
+            history.removeAt(index)
+            saveState()
+        }
     }
 
     fun setUnitsAndSave(u: Units) { units = u; saveState() }
     fun setThemeAndSave(t: ThemeMode) { themeMode = t; saveState() }
 
-    // --- Persistencia ---
+    // --- Persistence ---
     private fun saveState() {
+        val historyJson = JSONArray()
+        history.forEach { r ->
+            val entries = JSONArray()
+            r.entries.forEach { e ->
+                entries.put(JSONObject()
+                    .put("n", e.name).put("s", e.strokes)
+                    .put("r", e.relative).put("h", e.holes))
+            }
+            historyJson.put(JSONObject().put("d", r.date).put("e", entries))
+        }
         prefs.edit()
             .putString("names", players.joinToString("|") { it.name })
             .putString("scores", players.joinToString("|") { p -> p.strokes.joinToString(",") })
             .putString("units", units.name)
             .putString("theme", themeMode.name)
+            .putString("history", historyJson.toString())
             .apply()
     }
 
     private fun loadState() {
         units = runCatching { Units.valueOf(prefs.getString("units", "YARDS")!!) }.getOrDefault(Units.YARDS)
         themeMode = runCatching { ThemeMode.valueOf(prefs.getString("theme", "SYSTEM")!!) }.getOrDefault(ThemeMode.SYSTEM)
+
+        runCatching {
+            val arr = JSONArray(prefs.getString("history", "[]"))
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                val es = o.getJSONArray("e")
+                val entries = (0 until es.length()).map { j ->
+                    val e = es.getJSONObject(j)
+                    SavedRound.Entry(e.getString("n"), e.getInt("s"), e.getInt("r"), e.getInt("h"))
+                }
+                history.add(SavedRound(o.getLong("d"), entries))
+            }
+        }
+
         val names = prefs.getString("names", null)?.split("|")?.filter { it.isNotBlank() } ?: return
         val scores = prefs.getString("scores", null)?.split("|") ?: return
         names.forEachIndexed { i, name ->
