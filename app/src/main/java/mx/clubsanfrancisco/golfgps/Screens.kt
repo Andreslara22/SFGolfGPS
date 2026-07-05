@@ -213,6 +213,10 @@ private fun RangeScreen(vm: GolfViewModel, onRequestPermission: () -> Unit) {
 
             Spacer(Modifier.height(12.dp))
 
+            HoleMapCard(hole, vm.userLat, vm.userLng, vm.units)
+
+            Spacer(Modifier.height(12.dp))
+
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
