@@ -7,6 +7,7 @@
 
     <application
         android:label="SF Golf"
+        android:icon="@mipmap/ic_launcher"
         android:theme="@android:style/Theme.DeviceDefault">
 
         <uses-library android:name="com.google.android.wearable" android:required="false" />

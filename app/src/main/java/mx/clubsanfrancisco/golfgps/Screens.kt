@@ -179,6 +179,19 @@ private fun RangeScreen(vm: GolfViewModel, onRequestPermission: () -> Unit) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                if (distM != null) {
+                    // Approx. green radius 13 m -> front/back estimates like a rangefinder
+                    val fM = (distM - 13.0).coerceAtLeast(0.0)
+                    val bM = distM + 13.0
+                    val fV = if (yards) metersToYards(fM).roundToInt() else fM.roundToInt()
+                    val bV = if (yards) metersToYards(bM).roundToInt() else bM.roundToInt()
+                    Spacer(Modifier.height(4.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                        FcbLabel("F", fV)
+                        FcbLabel("C", distValue ?: 0)
+                        FcbLabel("B", bV)
+                    }
+                }
             }
 
             Spacer(Modifier.height(14.dp))
@@ -278,6 +291,25 @@ private fun RangeScreen(vm: GolfViewModel, onRequestPermission: () -> Unit) {
         }
 
         item { Spacer(Modifier.height(16.dp)) }
+    }
+}
+
+@Composable
+private fun FcbLabel(letter: String, value: Int) {
+    Row(verticalAlignment = Alignment.Bottom) {
+        Text(
+            letter,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Black,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Spacer(Modifier.width(3.dp))
+        Text(
+            value.toString(),
+            fontSize = 17.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onBackground
+        )
     }
 }
 

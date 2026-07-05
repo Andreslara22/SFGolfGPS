@@ -73,9 +73,20 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        if (vm.hasLocationPermission) startLocationUpdates()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        locationManager?.removeUpdates(locationListener)
+    }
+
     private fun startLocationUpdates() {
         try {
             val lm = locationManager ?: return
+            lm.removeUpdates(locationListener) // avoid duplicate registrations
             if (lm.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
                 lm.requestLocationUpdates(
                     LocationManager.GPS_PROVIDER,
