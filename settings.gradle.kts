@@ -14,3 +14,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "SFGolfGPS"
 include(":app")
+include(":wear")
