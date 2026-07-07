@@ -40,6 +40,38 @@ object WearCourse {
         holes.minBy { meters(lat, lng, it.teeLat, it.teeLng) }
 }
 
+// ---------------------------------------------------------------- Mapa por hoyo
+// Portado de la app de teléfono (CourseData.holeFeatures). t: 0..1 tee->green,
+// side: -1 izq / +1 der, size: escala. dogleg: curvatura del fairway.
+
+class WBunker(val t: Float, val side: Float, val size: Float = 1f)
+class WWater(val t: Float, val side: Float, val w: Float, val h: Float)
+class WFeatures(val dogleg: Float, val bunkers: List<WBunker>, val water: WWater? = null)
+
+val wearFeatures: Map<Int, WFeatures> = mapOf(
+    1 to WFeatures(0.10f, listOf(WBunker(0.92f, 1f, 1.15f)), WWater(0.84f, -1f, 0.9f, 0.8f)),
+    2 to WFeatures(0f, listOf(WBunker(0.82f, 1f, 1.2f), WBunker(0.86f, -1f, 0.75f))),
+    3 to WFeatures(-0.15f, listOf(WBunker(0.92f, -1f, 1.0f)), WWater(0.70f, -1f, 1.4f, 1.2f)),
+    4 to WFeatures(0.30f, listOf(WBunker(0.50f, -1f), WBunker(0.90f, 1f, 0.9f))),
+    5 to WFeatures(-0.10f, listOf(WBunker(0.55f, 1f), WBunker(0.90f, -1f, 1.0f))),
+    6 to WFeatures(0.05f, listOf(WBunker(0.35f, -1f, 0.8f), WBunker(0.90f, -1f, 1.0f),
+        WBunker(0.93f, 1f, 0.8f))),
+    7 to WFeatures(0f, listOf(WBunker(0.82f, -1f), WBunker(0.85f, 1f))),
+    8 to WFeatures(0.20f, listOf(WBunker(0.90f, -1f))),
+    9 to WFeatures(-0.10f, listOf(WBunker(0.90f, 1f, 0.9f)), WWater(0.55f, -1f, 1.8f, 1.4f)),
+    10 to WFeatures(0f, listOf(WBunker(0.85f, 1f))),
+    11 to WFeatures(0.05f, listOf(WBunker(0.55f, 1f), WBunker(0.90f, -1f))),
+    12 to WFeatures(0.35f, listOf(WBunker(0.70f, 1f), WBunker(0.90f, -1f, 0.8f)),
+        WWater(0.40f, -1f, 1.5f, 1.2f)),
+    13 to WFeatures(-0.30f, listOf(WBunker(0.88f, 1f)), WWater(0.50f, 1f, 1.1f, 0.9f)),
+    14 to WFeatures(0f, listOf(WBunker(0.83f, -1f), WBunker(0.86f, 1f, 0.9f))),
+    15 to WFeatures(0.05f, listOf(WBunker(0.60f, -1f)), WWater(0.88f, 1f, 1.5f, 1.2f)),
+    16 to WFeatures(0.15f, listOf(WBunker(0.88f, -1f))),
+    17 to WFeatures(-0.15f, listOf(WBunker(0.60f, 1f), WBunker(0.90f, -1f, 0.9f))),
+    18 to WFeatures(0.25f, listOf(WBunker(0.45f, -1f), WBunker(0.90f, -1f)),
+        WWater(0.55f, 1f, 1.7f, 1.3f))
+)
+
 fun meters(lat1: Double, lng1: Double, lat2: Double, lng2: Double): Double {
     val r = 6371000.0
     val dLat = Math.toRadians(lat2 - lat1)
