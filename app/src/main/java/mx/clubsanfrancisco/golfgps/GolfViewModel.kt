@@ -7,8 +7,19 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.lifecycle.AndroidViewModel
+import com.google.android.gms.wearable.DataClient
+import com.google.android.gms.wearable.DataEvent
+import com.google.android.gms.wearable.DataEventBuffer
+import com.google.android.gms.wearable.DataMapItem
+import com.google.android.gms.wearable.PutDataMapRequest
+import com.google.android.gms.wearable.Wearable
 import org.json.JSONArray
 import org.json.JSONObject
+
+// Data Layer: sincroniza los golpes del jugador principal con el reloj.
+private const val STROKES_PATH = "/round/strokes"
+private const val KEY_CSV = "csv"
+private const val KEY_TS = "ts"
 
 enum class Units { YARDS, METERS }
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
@@ -92,9 +103,11 @@ private const val ALT_EMA_ALPHA = 0.25
 /** Suavizado de la elevación aprendida de cada green. */
 private const val GREEN_EMA_ALPHA = 0.15
 
-class GolfViewModel(app: Application) : AndroidViewModel(app) {
+class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnDataChangedListener {
 
     private val prefs = app.getSharedPreferences("sfgolf", Context.MODE_PRIVATE)
+    private val dataClient: DataClient = Wearable.getDataClient(app)
+    private var strokesTs = 0L
 
     // --- GPS ---
     var userLat by mutableStateOf<Double?>(null); private set
@@ -137,6 +150,57 @@ class GolfViewModel(app: Application) : AndroidViewModel(app) {
     init {
         loadState()
         if (players.isEmpty()) players.add(Player("Player 1"))
+        strokesTs = prefs.getLong("strokesTs", 0L)
+
+        // Sincronización con el reloj (Data Layer).
+        dataClient.addListener(this)
+        dataClient.dataItems.addOnSuccessListener { items ->
+            for (item in items) {
+                if (item.uri.path == STROKES_PATH) {
+                    val dm = DataMapItem.fromDataItem(item).dataMap
+                    applyIncoming(dm.getString(KEY_CSV), dm.getLong(KEY_TS))
+                }
+            }
+            items.release()
+        }
+    }
+
+    // --- Sincronización de golpes con el reloj (jugador principal = players[0]) ---
+
+    /** Publica los 18 golpes del jugador principal para que el reloj los reciba. */
+    private fun pushStrokes() {
+        val p = players.getOrNull(0) ?: return
+        val req = PutDataMapRequest.create(STROKES_PATH).apply {
+            dataMap.putString(KEY_CSV, p.strokes.joinToString(","))
+            dataMap.putLong(KEY_TS, strokesTs)
+        }
+        dataClient.putDataItem(req.asPutDataRequest().setUrgent())
+    }
+
+    /** Aplica un score entrante del reloj si es más nuevo (last-write-wins). */
+    private fun applyIncoming(csv: String?, ts: Long) {
+        if (csv == null || ts <= strokesTs) return
+        val arr = csv.split(",").mapNotNull { it.toIntOrNull() }
+        if (arr.size != 18) return
+        val p = players.getOrNull(0) ?: return
+        arr.forEachIndexed { i, v -> p.strokes[i] = v }
+        strokesTs = ts
+        saveState()
+    }
+
+    override fun onDataChanged(events: DataEventBuffer) {
+        for (event in events) {
+            if (event.type == DataEvent.TYPE_CHANGED &&
+                event.dataItem.uri.path == STROKES_PATH) {
+                val dm = DataMapItem.fromDataItem(event.dataItem).dataMap
+                applyIncoming(dm.getString(KEY_CSV), dm.getLong(KEY_TS))
+            }
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        dataClient.removeListener(this)
     }
 
     val currentHole: Hole get() = CourseData.holes[currentHoleIndex]
@@ -252,7 +316,9 @@ class GolfViewModel(app: Application) : AndroidViewModel(app) {
         if (playerIdx in players.indices) {
             val p = players[playerIdx]
             if (p.strokes[holeIdx] < 15) p.strokes[holeIdx] = p.strokes[holeIdx] + 1
+            if (playerIdx == 0) strokesTs = System.currentTimeMillis()
             saveState()
+            if (playerIdx == 0) pushStrokes()
         }
     }
 
@@ -260,7 +326,9 @@ class GolfViewModel(app: Application) : AndroidViewModel(app) {
         if (playerIdx in players.indices) {
             val p = players[playerIdx]
             if (p.strokes[holeIdx] > 0) p.strokes[holeIdx] = p.strokes[holeIdx] - 1
+            if (playerIdx == 0) strokesTs = System.currentTimeMillis()
             saveState()
+            if (playerIdx == 0) pushStrokes()
         }
     }
 
@@ -417,7 +485,9 @@ class GolfViewModel(app: Application) : AndroidViewModel(app) {
         for (i in 0 until 18) flags[i] = -1
         currentHoleIndex = 0
         autoDetect = false
+        strokesTs = System.currentTimeMillis()
         saveState()
+        pushStrokes()
     }
 
     /** Clears current strokes without saving to history. */
@@ -427,7 +497,9 @@ class GolfViewModel(app: Application) : AndroidViewModel(app) {
         }
         for (i in 0 until 18) flags[i] = -1
         currentHoleIndex = 0
+        strokesTs = System.currentTimeMillis()
         saveState()
+        pushStrokes()
     }
 
     fun deleteRound(index: Int) {
@@ -464,6 +536,7 @@ class GolfViewModel(app: Application) : AndroidViewModel(app) {
             .putString("units", units.name)
             .putString("theme", themeMode.name)
             .putString("history", historyJson.toString())
+            .putLong("strokesTs", strokesTs)
             .apply()
     }
 

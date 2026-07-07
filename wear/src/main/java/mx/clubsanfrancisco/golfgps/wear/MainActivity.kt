@@ -40,14 +40,26 @@ import androidx.wear.compose.material.ButtonDefaults
 import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.Scaffold
 import androidx.wear.compose.material.Text
+import com.google.android.gms.wearable.DataClient
+import com.google.android.gms.wearable.DataEvent
+import com.google.android.gms.wearable.DataEventBuffer
+import com.google.android.gms.wearable.DataMapItem
+import com.google.android.gms.wearable.PutDataMapRequest
+import com.google.android.gms.wearable.Wearable
 
 private val Mint = Color(0xFF7ADFA8)
 private val Dim = Color(0xFF9BB8A8)
 private val Amber = Color(0xFFF3B61F)
 
-class MainActivity : ComponentActivity() {
+// Data Layer: ruta y llaves compartidas con la app de teléfono.
+private const val STROKES_PATH = "/round/strokes"
+private const val KEY_CSV = "csv"
+private const val KEY_TS = "ts"
+
+class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
 
     private lateinit var lm: LocationManager
+    private val dataClient: DataClient by lazy { Wearable.getDataClient(this) }
 
     private var lat by mutableStateOf<Double?>(null)
     private var lng by mutableStateOf<Double?>(null)
@@ -55,6 +67,7 @@ class MainActivity : ComponentActivity() {
     private var holeIdx by mutableStateOf(0)
     private var auto by mutableStateOf(true)
     private val strokes = mutableStateListOf<Int>().apply { repeat(18) { add(0) } }
+    private var strokesTs = 0L
 
     private val listener = object : LocationListener {
         override fun onLocationChanged(l: Location) {
@@ -86,8 +99,20 @@ class MainActivity : ComponentActivity() {
         val prefs = getSharedPreferences("wear", MODE_PRIVATE)
         prefs.getString("strokes", null)?.split(",")?.mapNotNull { it.toIntOrNull() }
             ?.takeIf { it.size == 18 }?.forEachIndexed { i, v -> strokes[i] = v }
+        strokesTs = prefs.getLong("strokesTs", 0L)
 
         setContent { WatchApp() }
+
+        // Trae el último score publicado por el teléfono (si es más nuevo).
+        dataClient.dataItems.addOnSuccessListener { items ->
+            for (item in items) {
+                if (item.uri.path == STROKES_PATH) {
+                    val dm = DataMapItem.fromDataItem(item).dataMap
+                    applyIncoming(dm.getString(KEY_CSV), dm.getLong(KEY_TS))
+                }
+            }
+            items.release()
+        }
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
             == PackageManager.PERMISSION_GRANTED) {
@@ -96,6 +121,16 @@ class MainActivity : ComponentActivity() {
         } else {
             permLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        dataClient.addListener(this)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        dataClient.removeListener(this)
     }
 
     private fun startGps() {
@@ -112,7 +147,48 @@ class MainActivity : ComponentActivity() {
     private fun persist() {
         getSharedPreferences("wear", MODE_PRIVATE).edit()
             .putString("strokes", strokes.joinToString(","))
+            .putLong("strokesTs", strokesTs)
             .apply()
+    }
+
+    /** Cambia los golpes del hoyo actual, guarda y publica al teléfono. */
+    private fun changeStroke(delta: Int) {
+        val v = strokes[holeIdx] + delta
+        if (v in 0..15) {
+            strokes[holeIdx] = v
+            strokesTs = System.currentTimeMillis()
+            persist()
+            pushStrokes()
+        }
+    }
+
+    /** Publica los 18 golpes en la Data Layer para que el teléfono los reciba. */
+    private fun pushStrokes() {
+        val req = PutDataMapRequest.create(STROKES_PATH).apply {
+            dataMap.putString(KEY_CSV, strokes.joinToString(","))
+            dataMap.putLong(KEY_TS, strokesTs)
+        }
+        dataClient.putDataItem(req.asPutDataRequest().setUrgent())
+    }
+
+    /** Aplica un score entrante si es más nuevo que el local (last-write-wins). */
+    private fun applyIncoming(csv: String?, ts: Long) {
+        if (csv == null || ts <= strokesTs) return
+        val arr = csv.split(",").mapNotNull { it.toIntOrNull() }
+        if (arr.size != 18) return
+        arr.forEachIndexed { i, v -> strokes[i] = v }
+        strokesTs = ts
+        persist()
+    }
+
+    override fun onDataChanged(events: DataEventBuffer) {
+        for (event in events) {
+            if (event.type == DataEvent.TYPE_CHANGED &&
+                event.dataItem.uri.path == STROKES_PATH) {
+                val dm = DataMapItem.fromDataItem(event.dataItem).dataMap
+                applyIncoming(dm.getString(KEY_CSV), dm.getLong(KEY_TS))
+            }
+        }
     }
 
     override fun onDestroy() {
@@ -215,13 +291,13 @@ class MainActivity : ComponentActivity() {
                             Spacer(Modifier.weight(1f))
                         }
 
-                        // ---- Golpes (grande y fácil de picar) ----
+                        // ---- Golpes (grande y fácil de picar, sincroniza con el cel) ----
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Button(
-                                onClick = { if (strokes[holeIdx] > 0) { strokes[holeIdx]--; persist() } },
+                                onClick = { changeStroke(-1) },
                                 modifier = Modifier.size(42.dp),
                                 colors = ButtonDefaults.secondaryButtonColors()
                             ) { Text("−", fontSize = 22.sp) }
@@ -237,7 +313,7 @@ class MainActivity : ComponentActivity() {
                                 Text("GOLPES", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = Dim)
                             }
                             Button(
-                                onClick = { if (strokes[holeIdx] < 15) { strokes[holeIdx]++; persist() } },
+                                onClick = { changeStroke(1) },
                                 modifier = Modifier.size(42.dp)
                             ) { Text("+", fontSize = 22.sp) }
                         }
