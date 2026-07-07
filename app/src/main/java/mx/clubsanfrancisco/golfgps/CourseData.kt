@@ -105,16 +105,22 @@ class HoleFeatures(
 )
 
 // Trazado por hoyo basado en imagen satelital del club (jul 2026).
-// Agua confirmada: green del 3, lago del 9 (izq) / 18 (der),
-// circuito norte 12-13, lago sur junto al green del 15.
+// Hoyos 1-6 verificados contra capturas satelitales de Andres (jul 2026):
+// 1: bunker grande dcha del green, lago chico izq · 2: bunker grande dcha
+// + chico izq, árboles densos dcha · 3: lago con fuente izq ~70%, bunker
+// izq del green · 6: bunker medio-izq + racimo en green, árboles al centro.
+// Agua confirmada resto: lago del 9 (izq) / 18 (der), circuito norte 12-13,
+// lago sur junto al green del 15.
 val holeFeatures: Map<Int, HoleFeatures> = mapOf(
-    1 to HoleFeatures(0.10f, listOf(Bunker(0.88f, -1f), Bunker(0.90f, 1f, 0.8f)), trees = 4),
-    2 to HoleFeatures(0f, listOf(Bunker(0.84f, 1f)), trees = 3),
-    3 to HoleFeatures(-0.15f, listOf(Bunker(0.90f, 1f, 0.9f)),
-        water = Water(0.78f, -1f, 1.3f, 1.1f), trees = 4),
-    4 to HoleFeatures(0.30f, listOf(Bunker(0.45f, -1f), Bunker(0.90f, 1f, 0.8f)), trees = 6),
-    5 to HoleFeatures(-0.10f, listOf(Bunker(0.50f, 1f), Bunker(0.88f, -1f, 0.9f)), trees = 4),
-    6 to HoleFeatures(0.05f, listOf(Bunker(0.85f, -1f), Bunker(0.88f, 1f, 0.8f)), trees = 5),
+    1 to HoleFeatures(0.10f, listOf(Bunker(0.92f, 1f, 1.15f)),
+        water = Water(0.84f, -1f, 0.9f, 0.8f), trees = 4),
+    2 to HoleFeatures(0f, listOf(Bunker(0.82f, 1f, 1.2f), Bunker(0.86f, -1f, 0.75f)), trees = 5),
+    3 to HoleFeatures(-0.15f, listOf(Bunker(0.92f, -1f, 1.0f)),
+        water = Water(0.70f, -1f, 1.4f, 1.2f), trees = 4),
+    4 to HoleFeatures(0.30f, listOf(Bunker(0.50f, -1f), Bunker(0.90f, 1f, 0.9f)), trees = 6),
+    5 to HoleFeatures(-0.10f, listOf(Bunker(0.55f, 1f), Bunker(0.90f, -1f, 1.0f)), trees = 4),
+    6 to HoleFeatures(0.05f, listOf(Bunker(0.35f, -1f, 0.8f), Bunker(0.90f, -1f, 1.0f),
+        Bunker(0.93f, 1f, 0.8f)), trees = 6),
     7 to HoleFeatures(0f, listOf(Bunker(0.82f, -1f), Bunker(0.85f, 1f)), trees = 3),
     8 to HoleFeatures(0.20f, listOf(Bunker(0.90f, -1f)), trees = 4),
     9 to HoleFeatures(-0.10f, listOf(Bunker(0.90f, 1f, 0.9f)),

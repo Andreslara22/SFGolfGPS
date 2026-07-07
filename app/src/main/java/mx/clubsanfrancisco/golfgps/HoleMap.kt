@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalDensity
@@ -35,24 +36,28 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.random.Random
 
-// ---- Paleta caricatura (fija en ambos temas: es terreno) ----
-private val Rough = Color(0xFF14382A)
-private val RoughDots = Color(0xFF1B4634)
-private val Fairway = Color(0xFF3E8E5E)
-private val FairwayStripe = Color(0xFF4BA06C)
-private val GreenFringe = Color(0xFF57B87B)
-private val GreenTurf = Color(0xFF7FD69E)
-private val Sand = Color(0xFFEAD08F)
-private val SandShadow = Color(0xFFC9A75E)
-private val WaterDeep = Color(0xFF2C5F94)
-private val WaterBlue = Color(0xFF3D7FC1)
-private val Ripple = Color(0xFF7FB2E3)
-private val TreeDark = Color(0xFF1F5C3C)
-private val TreeLight = Color(0xFF2E7A50)
+// ---- Paleta ilustración flat (referencia: aerial vector, desierto Chihuahua) ----
+private val Waste = Color(0xFFEBDFC6)        // terreno desértico
+private val WasteDots = Color(0xFFD9C8A5)    // matorral / textura
+private val WasteScrub = Color(0xFFC9B78E)   // arbustos secos
+private val RoughBand = Color(0xFF9EB47B)    // semi-rough alrededor del fairway
+private val Fairway = Color(0xFF74A257)
+private val FairwayStripe = Color(0xFF7FAD61) // franja de podado diagonal
+private val GreenFringe = Color(0xFF93C06E)
+private val GreenTurf = Color(0xFFAFD489)
+private val Sand = Color(0xFFF4EAD2)
+private val SandShadow = Color(0xFFD8C69E)
+private val WaterDeep = Color(0xFF4C80B4)
+private val WaterBlue = Color(0xFF6FA9DA)
+private val Ripple = Color(0xFFA9CBEA)
+private val TreeDark = Color(0xFF3F6C3C)
+private val TreeLight = Color(0xFF548549)
+private val TreeShadow = Color(0x2E2A4526)
 private val Trunk = Color(0xFF6B4B2A)
-private val FlagRed = Color(0xFFE85D4A)
-private val Pole = Color(0xFFF4F1E8)
-private val PlayerBlue = Color(0xFF5AB0FF)
+private val FlagRed = Color(0xFFE0584A)
+private val Pole = Color(0xFFFFFDF6)
+private val PlayerBlue = Color(0xFF3D8BFF)
+private val LineDark = Color(0xFF4E5A42)
 
 @Composable
 fun HoleMapCard(hole: Hole, userLat: Double?, userLng: Double?, units: Units) {
@@ -68,7 +73,7 @@ fun HoleMapCard(hole: Hole, userLat: Double?, userLng: Double?, units: Units) {
             .fillMaxWidth()
             .height(280.dp),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Rough)
+        colors = CardDefaults.cardColors(containerColor = Waste)
     ) {
         Canvas(
             Modifier
@@ -159,15 +164,23 @@ private fun DrawScope.drawHoleMap(
         return Offset(-ty / len, tx / len) // +1 = derecha del jugador
     }
 
-    // ---- Rough: pasto punteado + número de hoyo de fondo ----
+    // ---- Terreno desértico: textura de puntos + matorral + número de fondo ----
     val rnd = Random(hole.number * 97)
-    repeat(54) {
+    repeat(46) {
         val p = Offset(rnd.nextFloat() * w, rnd.nextFloat() * h)
-        drawCircle(RoughDots, radius = 2f + rnd.nextFloat() * 2.5f, center = p)
+        drawCircle(WasteDots, radius = 1.5f + rnd.nextFloat() * 2f, center = p)
+    }
+    repeat(14) {
+        // arbustos secos: racimos de 3 puntitos
+        val p = Offset(rnd.nextFloat() * w, rnd.nextFloat() * h)
+        val r = 2.2f + rnd.nextFloat() * 1.6f
+        drawCircle(WasteScrub, radius = r, center = p)
+        drawCircle(WasteScrub, radius = r * 0.8f, center = p + Offset(r * 1.3f, r * 0.4f))
+        drawCircle(WasteScrub, radius = r * 0.7f, center = p + Offset(-r * 0.9f, r * 0.9f))
     }
     drawIntoCanvas { canvas ->
         val paint = android.graphics.Paint().apply {
-            color = android.graphics.Color.argb(26, 255, 255, 255)
+            color = android.graphics.Color.argb(30, 121, 106, 72)
             textSize = h * 0.42f
             isFakeBoldText = true
             textAlign = android.graphics.Paint.Align.RIGHT
@@ -176,22 +189,56 @@ private fun DrawScope.drawHoleMap(
         canvas.nativeCanvas.drawText("${hole.number}", w - 14f, h * 0.42f, paint)
     }
 
-    // ---- Fairway base + franjas de podado ----
+    // ---- Fairway: blob orgánico de ancho variable + semi-rough alrededor ----
     val fairwayW = if (hole.par == 3) w * 0.20f else w * 0.30f
-    val samples = 28
-    val basePath = Path().apply {
-        moveTo(p0.x, p0.y)
-        for (i in 1..samples) { val q = bez(i / samples.toFloat()); lineTo(q.x, q.y) }
+    val samples = 30
+    val seed = hole.number * 1.7f
+    fun widthAt(t: Float): Float {
+        // más angosto en salida, panza en zona de caída, cintura antes del green
+        val base = 0.62f + 0.38f * sin(PI.toFloat() * (0.15f + 0.85f * t))
+        val wobble = 1f + 0.13f * sin(t * 9.4f + seed) + 0.07f * sin(t * 17.3f + seed * 2.1f)
+        return fairwayW * 0.5f * base * wobble
     }
-    drawPath(basePath, Fairway, style = Stroke(width = fairwayW, cap = StrokeCap.Round))
-    val bands = 10
-    for (k in 0 until bands step 2) {
-        val seg = Path().apply {
-            val t0 = k / bands.toFloat(); val t1 = (k + 1) / bands.toFloat()
-            val q0 = bez(t0); moveTo(q0.x, q0.y)
-            for (i in 1..4) { val q = bez(t0 + (t1 - t0) * i / 4f); lineTo(q.x, q.y) }
+    fun blobPath(scaleW: Float): Path {
+        val left = ArrayList<Offset>(samples + 1)
+        val right = ArrayList<Offset>(samples + 1)
+        for (i in 0..samples) {
+            val t = i / samples.toFloat()
+            val c = bez(t); val n = perp(t); val ww = widthAt(t) * scaleW
+            left.add(c + n * -ww)
+            right.add(c + n * ww)
         }
-        drawPath(seg, FairwayStripe, style = Stroke(width = fairwayW * 0.9f, cap = StrokeCap.Butt))
+        return Path().apply {
+            moveTo(left[0].x, left[0].y)
+            for (q in left) lineTo(q.x, q.y)
+            for (q in right.reversed()) lineTo(q.x, q.y)
+            close()
+        }
+    }
+    val roughPath = blobPath(1.55f)
+    val blob = blobPath(1f)
+    drawPath(roughPath, RoughBand)
+    drawPath(blob, Fairway)
+    // caps redondeados en tee y entrada al green
+    drawCircle(RoughBand, radius = widthAt(0f) * 1.55f, center = p0)
+    drawCircle(Fairway, radius = widthAt(0f), center = p0)
+    drawCircle(RoughBand, radius = widthAt(1f) * 1.55f, center = p2)
+    drawCircle(Fairway, radius = widthAt(1f), center = p2)
+    // franjas de podado diagonales (recortadas al fairway)
+    clipPath(blob) {
+        val stripeW = w * 0.075f
+        var x = -h * 0.7f
+        var k = 0
+        while (x < w + h * 0.7f) {
+            if (k % 2 == 0) {
+                drawLine(
+                    FairwayStripe,
+                    Offset(x, h + 10f), Offset(x + h * 0.7f, -10f),
+                    strokeWidth = stripeW
+                )
+            }
+            x += stripeW; k++
+        }
     }
 
     // ---- Agua (si el hoyo tiene) ----
@@ -201,7 +248,6 @@ private fun DrawScope.drawHoleMap(
         val ph = w * 0.105f * wa.h
         drawOval(WaterDeep, topLeft = Offset(c.x - pw, c.y - ph + 5f), size = Size(pw * 2, ph * 2))
         drawOval(WaterBlue, topLeft = Offset(c.x - pw, c.y - ph), size = Size(pw * 2, ph * 2))
-        // ondas
         for (i in 0..1) {
             drawArc(
                 Ripple, startAngle = 200f, sweepAngle = 120f, useCenter = false,
@@ -212,7 +258,7 @@ private fun DrawScope.drawHoleMap(
         }
     }
 
-    // ---- Bunkers: blobs de arena irregulares ----
+    // ---- Bunkers: blobs de arena suaves con sombra ----
     f.bunkers.forEach { b ->
         val c = bez(b.t) + perp(b.t) * b.side * (fairwayW * 0.5f + w * 0.045f * b.size)
         val br = w * 0.052f * b.size
@@ -221,7 +267,7 @@ private fun DrawScope.drawHoleMap(
         drawOval(Sand, topLeft = Offset(c.x - br * 0.5f, c.y - br * 0.85f), size = Size(br * 1.3f, br * 0.9f))
     }
 
-    // ---- Árboles: racimos por hoyo ----
+    // ---- Árboles: flat con sombra desplazada ----
     val treeRnd = Random(hole.number * 31 + 7)
     repeat(f.trees) { i ->
         val t = 0.12f + treeRnd.nextFloat() * 0.72f
@@ -229,18 +275,33 @@ private fun DrawScope.drawHoleMap(
         val c = bez(t) + perp(t) * side * (fairwayW * 0.5f + w * (0.11f + treeRnd.nextFloat() * 0.08f))
         val r = w * (0.040f + treeRnd.nextFloat() * 0.017f)
         if (c.x - r > 4f && c.x + r < w - 4f && c.y - r > 4f && c.y + r < h - 4f) {
-            drawLine(Trunk, Offset(c.x, c.y + r * 0.4f), Offset(c.x, c.y + r * 1.15f),
-                strokeWidth = r * 0.35f, cap = StrokeCap.Round)
+            drawOval(TreeShadow, topLeft = Offset(c.x - r * 0.85f + r * 0.5f, c.y - r * 0.35f + r * 0.55f),
+                size = Size(r * 2.1f, r * 1.1f))
+            drawLine(Trunk, Offset(c.x, c.y + r * 0.4f), Offset(c.x, c.y + r * 1.1f),
+                strokeWidth = r * 0.32f, cap = StrokeCap.Round)
             drawCircle(TreeDark, radius = r, center = c)
-            drawCircle(TreeDark, radius = r * 0.7f, center = Offset(c.x + r * 0.55f, c.y + r * 0.15f))
-            drawCircle(TreeLight, radius = r * 0.55f, center = Offset(c.x - r * 0.3f, c.y - r * 0.3f))
+            drawCircle(TreeDark, radius = r * 0.68f, center = Offset(c.x + r * 0.55f, c.y + r * 0.15f))
+            drawCircle(TreeLight, radius = r * 0.52f, center = Offset(c.x - r * 0.3f, c.y - r * 0.3f))
         }
     }
 
-    // ---- Green: sombra + fringe + pasto + bandera + hoyo ----
-    drawCircle(Color(0x40000000), radius = gr * 1.18f, center = Offset(greenP.x + 3f, greenP.y + 5f))
-    drawCircle(GreenFringe, radius = gr * 1.18f, center = greenP)
-    drawCircle(GreenTurf, radius = gr, center = greenP)
+    // ---- Green: blob orgánico + fringe + bandera ----
+    val greenSeed = hole.number * 2.3f
+    fun greenBlob(radius: Float, offset: Offset = Offset.Zero): Path {
+        val pts = 26
+        return Path().apply {
+            for (i in 0..pts) {
+                val a = (i / pts.toFloat()) * 2f * PI.toFloat()
+                val rr = radius * (1f + 0.11f * sin(3f * a + greenSeed) + 0.05f * sin(5f * a - greenSeed))
+                val p = Offset(greenP.x + offset.x + rr * cos(a), greenP.y + offset.y + rr * sin(a))
+                if (i == 0) moveTo(p.x, p.y) else lineTo(p.x, p.y)
+            }
+            close()
+        }
+    }
+    drawPath(greenBlob(gr * 1.22f, Offset(3f, 5f)), Color(0x26203A1E))
+    drawPath(greenBlob(gr * 1.22f), GreenFringe)
+    drawPath(greenBlob(gr), GreenTurf)
     val poleTop = Offset(greenP.x, greenP.y - gr * 1.55f)
     drawLine(Pole, greenP, poleTop, strokeWidth = 4f, cap = StrokeCap.Round)
     val flagPath = Path().apply {
@@ -270,7 +331,7 @@ private fun DrawScope.drawHoleMap(
                 textSize = labelPx * sizeFactor
                 isFakeBoldText = true
                 textAlign = android.graphics.Paint.Align.CENTER
-                setShadowLayer(6f, 0f, 2f, android.graphics.Color.argb(180, 0, 0, 0))
+                setShadowLayer(6f, 0f, 2f, android.graphics.Color.argb(200, 46, 56, 38))
                 isAntiAlias = true
             }
             canvas.nativeCanvas.drawText(text, at.x, at.y, paint)
@@ -298,15 +359,12 @@ private fun DrawScope.drawHoleMap(
         val d1 = haversineMeters(originLat, originLng, tapLat, tapLng)
         val d2 = haversineMeters(tapLat, tapLng, hole.greenLat, hole.greenLng)
 
-        // Tramo 1: origen -> cursor (sólido azul)
         drawLine(PlayerBlue, origin, cursor, strokeWidth = 4f, cap = StrokeCap.Round)
-        // Tramo 2: cursor -> green (punteado blanco)
         drawLine(
-            Pole.copy(alpha = 0.85f), cursor, greenP,
+            LineDark.copy(alpha = 0.85f), cursor, greenP,
             strokeWidth = 3.5f,
             pathEffect = PathEffect.dashPathEffect(floatArrayOf(16f, 12f))
         )
-        // Marcador del cursor: cruz + anillo
         drawCircle(Color(0x59000000), radius = 15f, center = cursor + Offset(2f, 3f))
         drawCircle(Pole, radius = 13f, center = cursor, style = Stroke(width = 4f))
         drawLine(Pole, cursor + Offset(-19f, 0f), cursor + Offset(-8f, 0f), strokeWidth = 3f, cap = StrokeCap.Round)
@@ -320,9 +378,8 @@ private fun DrawScope.drawHoleMap(
         drawDistLabel(fmtDist(d2), mid2)
         drawDistLabel("toca el marcador para quitarlo", Offset(w / 2f, h - 10f), 0.72f)
     } else if (user != null && userLat != null && userLng != null) {
-        // ---- Línea directa jugador -> green ----
         drawLine(
-            Pole.copy(alpha = 0.85f), user, greenP,
+            LineDark.copy(alpha = 0.85f), user, greenP,
             strokeWidth = 3.5f,
             pathEffect = PathEffect.dashPathEffect(floatArrayOf(16f, 12f))
         )
