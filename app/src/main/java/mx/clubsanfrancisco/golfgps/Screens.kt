@@ -105,9 +105,11 @@ private fun RangeScreen(vm: GolfViewModel, onRequestPermission: () -> Unit) {
     val yards = vm.units == Units.YARDS
     val haptics = LocalHapticFeedback.current
 
-    // Pin position shifts the target ~8 yd forward (red) or back (blue)
+    // Pin position shifts the target proportionally to this green's depth:
+    // red (front) ≈ -depth/4 · blue (back) ≈ +depth/4
     val flag = vm.flags[vm.currentHoleIndex]
-    val flagOffsetM = when (flag) { 0 -> -7.3152; 2 -> 7.3152; else -> 0.0 }
+    val pinShiftM = hole.greenDepthM / 4.0
+    val flagOffsetM = when (flag) { 0 -> -pinShiftM; 2 -> pinShiftM; else -> 0.0 }
     val distAdjM = distM?.plus(flagOffsetM)?.coerceAtLeast(0.0)
 
     val distValue: Int? = distAdjM?.let {
@@ -116,7 +118,13 @@ private fun RangeScreen(vm: GolfViewModel, onRequestPermission: () -> Unit) {
     val unitShort = if (yards) "yd" else "m"
     val refDist = if (yards) metersToYards(hole.referenceMeters).roundToInt()
                   else hole.referenceMeters.roundToInt()
-    val clubYards = distAdjM?.let { metersToYards(it) }
+
+    // "Plays like": distancia efectiva por elevación (autocalibrada en greens).
+    val elevDeltaM = vm.elevationDeltaM()
+    val playsLikeAdjM = vm.playsLikeMeters()?.plus(flagOffsetM)?.coerceAtLeast(0.0)
+
+    // El palo sugerido usa la distancia efectiva cuando existe.
+    val clubYards = (playsLikeAdjM ?: distAdjM)?.let { metersToYards(it) }
 
     LazyColumn(
         modifier = Modifier
@@ -222,10 +230,39 @@ private fun RangeScreen(vm: GolfViewModel, onRequestPermission: () -> Unit) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                // "Plays like" por elevación (aparece tras pisar este green una vez)
+                if (playsLikeAdjM != null && elevDeltaM != null) {
+                    val plV = if (yards) metersToYards(playsLikeAdjM).roundToInt()
+                              else playsLikeAdjM.roundToInt()
+                    val up = elevDeltaM > 0
+                    Spacer(Modifier.height(4.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "PLAYS LIKE ",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            "$plV $unitShort",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Black,
+                            color = if (up) Color(0xFFE85D4A) else Color(0xFF5AB0FF)
+                        )
+                        Text(
+                            if (up) "  ▲ +${elevDeltaM.roundToInt()} m"
+                            else "  ▼ ${elevDeltaM.roundToInt()} m",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = if (up) Color(0xFFE85D4A) else Color(0xFF5AB0FF)
+                        )
+                    }
+                }
                 if (distM != null) {
-                    // Approx. green radius 13 m -> front/back estimates like a rangefinder
-                    val fM = (distM - 13.0).coerceAtLeast(0.0)
-                    val bM = distM + 13.0
+                    // Front/back reales usando la profundidad de este green
+                    val half = hole.greenDepthM / 2.0
+                    val fM = (distM - half).coerceAtLeast(0.0)
+                    val bM = distM + half
                     val fV = if (yards) metersToYards(fM).roundToInt() else fM.roundToInt()
                     val bV = if (yards) metersToYards(bM).roundToInt() else bM.roundToInt()
                     Spacer(Modifier.height(4.dp))
@@ -849,6 +886,32 @@ private fun SettingsScreen(vm: GolfViewModel) {
                 ChoiceButton("System", vm.themeMode == ThemeMode.SYSTEM) { vm.setThemeAndSave(ThemeMode.SYSTEM) }
                 ChoiceButton("Light", vm.themeMode == ThemeMode.LIGHT) { vm.setThemeAndSave(ThemeMode.LIGHT) }
                 ChoiceButton("Dark", vm.themeMode == ThemeMode.DARK) { vm.setThemeAndSave(ThemeMode.DARK) }
+            }
+
+            Spacer(Modifier.height(22.dp))
+            Text("Elevation (\"plays like\")", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(
+                "The app learns each green's elevation when you walk onto it with GPS on. " +
+                "After one round, distances adjust automatically for uphill/downhill shots.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Pill(
+                    "${vm.calibratedGreens}/18 greens calibrated",
+                    MaterialTheme.colorScheme.primaryContainer,
+                    MaterialTheme.colorScheme.onPrimaryContainer
+                )
+                Spacer(Modifier.width(10.dp))
+                if (vm.calibratedGreens > 0) {
+                    Text(
+                        "✕ reset",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.clickable { vm.resetElevations() }
+                    )
+                }
             }
 
             Spacer(Modifier.height(22.dp))

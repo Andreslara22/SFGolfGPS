@@ -46,6 +46,15 @@ class SavedRound(
 /** Auto hole switching only engages within this distance of a tee (meters). */
 private const val AUTO_DETECT_RADIUS_M = 150.0
 
+/** Radio alrededor del centro del green para autocalibrar elevación (m). */
+private const val GREEN_CALIBRATION_RADIUS_M = 22.0
+/** Precisión GPS mínima para confiar en la altitud (m). */
+private const val MAX_ACCURACY_FOR_ALT_M = 15.0
+/** Suavizado de la altitud del jugador. */
+private const val ALT_EMA_ALPHA = 0.25
+/** Suavizado de la elevación aprendida de cada green. */
+private const val GREEN_EMA_ALPHA = 0.15
+
 class GolfViewModel(app: Application) : AndroidViewModel(app) {
 
     private val prefs = app.getSharedPreferences("sfgolf", Context.MODE_PRIVATE)
@@ -55,6 +64,18 @@ class GolfViewModel(app: Application) : AndroidViewModel(app) {
     var userLng by mutableStateOf<Double?>(null); private set
     var gpsAccuracyM by mutableStateOf<Float?>(null); private set
     var hasLocationPermission by mutableStateOf(false)
+
+    // --- Altitud (para "plays like") ---
+    /** Altitud del jugador, suavizada con media móvil exponencial (el GPS es ruidoso en vertical). */
+    var userAltM by mutableStateOf<Double?>(null); private set
+    /**
+     * Elevación de cada green, autocalibrada: cuando el jugador pisa un green
+     * (a ≤ [GREEN_CALIBRATION_RADIUS_M] del centro con buena precisión) se
+     * promedia su altitud GPS hacia ese hoyo. Tras una ronda el campo queda
+     * mapeado y persiste en SharedPreferences. Double.NaN = sin dato aún.
+     */
+    private val greenElevM = DoubleArray(18) { Double.NaN }
+    var calibratedGreens by mutableStateOf(0); private set
 
     // --- Current hole (always starts at hole 1) ---
     var currentHoleIndex by mutableStateOf(0); private set
@@ -83,10 +104,18 @@ class GolfViewModel(app: Application) : AndroidViewModel(app) {
 
     val currentHole: Hole get() = CourseData.holes[currentHoleIndex]
 
-    fun onLocation(lat: Double, lng: Double, accuracy: Float) {
+    fun onLocation(lat: Double, lng: Double, accuracy: Float, altitudeM: Double? = null) {
         userLat = lat
         userLng = lng
         gpsAccuracyM = accuracy
+
+        if (altitudeM != null && accuracy <= MAX_ACCURACY_FOR_ALT_M) {
+            // EMA: suaviza el ruido vertical del GPS (±5-10 m por lectura).
+            userAltM = userAltM?.let { it * (1 - ALT_EMA_ALPHA) + altitudeM * ALT_EMA_ALPHA }
+                ?: altitudeM
+            calibrateGreenIfOnIt(lat, lng)
+        }
+
         if (autoDetect) {
             val nearest = CourseData.nearestHoleByTee(lat, lng)
             val dist = haversineMeters(lat, lng, nearest.teeLat, nearest.teeLng)
@@ -98,11 +127,64 @@ class GolfViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Si el jugador está parado sobre un green, aprende su elevación. */
+    private fun calibrateGreenIfOnIt(lat: Double, lng: Double) {
+        val alt = userAltM ?: return
+        CourseData.holes.forEachIndexed { i, h ->
+            if (haversineMeters(lat, lng, h.greenLat, h.greenLng) <= GREEN_CALIBRATION_RADIUS_M) {
+                greenElevM[i] = if (greenElevM[i].isNaN()) alt
+                    else greenElevM[i] * (1 - GREEN_EMA_ALPHA) + alt * GREEN_EMA_ALPHA
+                val count = greenElevM.count { !it.isNaN() }
+                if (count != calibratedGreens) calibratedGreens = count
+                saveElevations()
+            }
+        }
+    }
+
     fun distanceToGreenMeters(): Double? {
         val lat = userLat ?: return null
         val lng = userLng ?: return null
         val h = currentHole
         return haversineMeters(lat, lng, h.greenLat, h.greenLng)
+    }
+
+    /**
+     * Diferencia de elevación jugador → green del hoyo actual, en metros.
+     * Positivo = green cuesta arriba. Null si aún no hay calibración para
+     * este green o no hay altitud GPS.
+     */
+    fun elevationDeltaM(): Double? {
+        val alt = userAltM ?: return null
+        val g = greenElevM[currentHoleIndex]
+        if (g.isNaN()) return null
+        return g - alt
+    }
+
+    /**
+     * Distancia "plays like": distancia real + ajuste por elevación.
+     * Regla práctica de campo: cada metro de subida/bajada suma/resta ~1 m
+     * efectivo al tiro. Se ignoran deltas menores a 2 m (ruido GPS).
+     */
+    fun playsLikeMeters(): Double? {
+        val dist = distanceToGreenMeters() ?: return null
+        val delta = elevationDeltaM() ?: return null
+        if (kotlin.math.abs(delta) < 2.0) return null
+        return (dist + delta).coerceAtLeast(0.0)
+    }
+
+    /** Borra las elevaciones aprendidas (por si una calibración salió mal). */
+    fun resetElevations() {
+        for (i in 0 until 18) greenElevM[i] = Double.NaN
+        calibratedGreens = 0
+        saveElevations()
+    }
+
+    private fun saveElevations() {
+        prefs.edit()
+            .putString("greenElev", greenElevM.joinToString(",") {
+                if (it.isNaN()) "" else "%.1f".format(it)
+            })
+            .apply()
     }
 
     fun nextHole() {
@@ -262,6 +344,11 @@ class GolfViewModel(app: Application) : AndroidViewModel(app) {
         prefs.getString("flags", null)?.split(",")?.mapNotNull { it.toIntOrNull() }
             ?.takeIf { it.size == 18 }
             ?.forEachIndexed { i, v -> flags[i] = v }
+
+        prefs.getString("greenElev", null)?.split(",")
+            ?.takeIf { it.size == 18 }
+            ?.forEachIndexed { i, s -> greenElevM[i] = s.toDoubleOrNull() ?: Double.NaN }
+        calibratedGreens = greenElevM.count { !it.isNaN() }
 
         runCatching {
             val arr = JSONArray(prefs.getString("history", "[]"))

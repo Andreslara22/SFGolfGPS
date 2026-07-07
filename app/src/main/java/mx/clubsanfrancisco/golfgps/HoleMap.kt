@@ -1,12 +1,18 @@
 package mx.clubsanfrancisco.golfgps
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -53,6 +59,10 @@ fun HoleMapCard(hole: Hole, userLat: Double?, userLng: Double?, units: Units) {
     val density = LocalDensity.current
     val labelPx = with(density) { 13.dp.toPx() }
 
+    // Cursor de medición: toca el mapa para medir a ese punto (layups).
+    // Se reinicia al cambiar de hoyo. Tocar cerca del cursor lo quita.
+    var tapPoint by remember(hole.number) { mutableStateOf<Offset?>(null) }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -60,8 +70,19 @@ fun HoleMapCard(hole: Hole, userLat: Double?, userLng: Double?, units: Units) {
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = Rough)
     ) {
-        Canvas(Modifier.fillMaxWidth().height(280.dp)) {
-            drawHoleMap(hole, userLat, userLng, units, labelPx)
+        Canvas(
+            Modifier
+                .fillMaxWidth()
+                .height(280.dp)
+                .pointerInput(hole.number) {
+                    detectTapGestures { tap ->
+                        val current = tapPoint
+                        tapPoint = if (current != null &&
+                            (current - tap).getDistance() < 44f) null else tap
+                    }
+                }
+        ) {
+            drawHoleMap(hole, userLat, userLng, units, labelPx, tapPoint)
         }
     }
 }
@@ -71,7 +92,8 @@ private fun DrawScope.drawHoleMap(
     userLat: Double?,
     userLng: Double?,
     units: Units,
-    labelPx: Float
+    labelPx: Float,
+    tapPoint: Offset? = null
 ) {
     val w = size.width
     val h = size.height
@@ -102,6 +124,17 @@ private fun DrawScope.drawHoleMap(
     fun toScreen(p: Offset): Offset {
         val r = rotate(p)
         return Offset(cx + r.x * scale, cy + r.y * scale)
+    }
+    /** Inversa de toScreen: píxel en pantalla -> lat/lng reales. */
+    fun toLatLng(s: Offset): Pair<Double, Double> {
+        val rx = (s.x - cx) / scale
+        val ry = (s.y - cy) / scale
+        val c = cos(-rot); val sn = sin(-rot)
+        val px = rx * c - ry * sn
+        val py = rx * sn + ry * c
+        val lat = lat0 - py / 110540.0
+        val lng = lng0 + px / (cos(Math.toRadians(lat0)) * 111320.0)
+        return lat to lng
     }
 
     val teeP = Offset(cx, teeY)
@@ -227,40 +260,85 @@ private fun DrawScope.drawHoleMap(
     drawCircle(FlagRed, radius = 3.2f, center = Offset(teeP.x - 14f, teeP.y))
     drawCircle(FlagRed, radius = 3.2f, center = Offset(teeP.x + 14f, teeP.y))
 
-    // ---- Jugador + línea punteada + distancia en vivo ----
-    if (userLat != null && userLng != null) {
-        val raw = toScreen(local(userLat, userLng))
-        val pad = 18f
-        val user = Offset(raw.x.coerceIn(pad, w - pad), raw.y.coerceIn(pad, h - pad))
-        val offMap = raw != user
-
-        drawLine(
-            Pole.copy(alpha = 0.85f), user, greenP,
-            strokeWidth = 3.5f,
-            pathEffect = PathEffect.dashPathEffect(floatArrayOf(16f, 12f))
-        )
-        drawCircle(PlayerBlue.copy(alpha = 0.28f), radius = 20f, center = user)
-        drawCircle(Pole, radius = 10f, center = user)
-        drawCircle(PlayerBlue, radius = 7f, center = user)
-
-        val distM = haversineMeters(userLat, userLng, hole.greenLat, hole.greenLng)
-        val label = if (units == Units.YARDS)
-            "${metersToYards(distM).roundToInt()} yd" else "${distM.roundToInt()} m"
-        val mid = Offset((user.x + greenP.x) / 2f, (user.y + greenP.y) / 2f)
+    // ---- Utilidad: etiqueta de distancia con sombra ----
+    fun fmtDist(m: Double): String = if (units == Units.YARDS)
+        "${metersToYards(m).roundToInt()} yd" else "${m.roundToInt()} m"
+    fun drawDistLabel(text: String, at: Offset, sizeFactor: Float = 1f) {
         drawIntoCanvas { canvas ->
             val paint = android.graphics.Paint().apply {
                 color = android.graphics.Color.WHITE
-                textSize = labelPx
+                textSize = labelPx * sizeFactor
                 isFakeBoldText = true
                 textAlign = android.graphics.Paint.Align.CENTER
                 setShadowLayer(6f, 0f, 2f, android.graphics.Color.argb(180, 0, 0, 0))
                 isAntiAlias = true
             }
-            canvas.nativeCanvas.drawText(label, mid.x + 28f, mid.y, paint)
-            if (offMap) {
-                paint.textSize = labelPx * 0.8f
-                canvas.nativeCanvas.drawText("(you are off the map)", user.x, user.y + 34f, paint)
-            }
+            canvas.nativeCanvas.drawText(text, at.x, at.y, paint)
         }
+    }
+
+    // ---- Posición del jugador en pantalla (o tee si no hay GPS) ----
+    val pad = 18f
+    var user: Offset? = null
+    var offMap = false
+    if (userLat != null && userLng != null) {
+        val raw = toScreen(local(userLat, userLng))
+        user = Offset(raw.x.coerceIn(pad, w - pad), raw.y.coerceIn(pad, h - pad))
+        offMap = raw != user
+    }
+
+    if (tapPoint != null) {
+        // ---- Cursor de medición: origen -> punto tocado -> green ----
+        val cursor = Offset(tapPoint.x.coerceIn(pad, w - pad), tapPoint.y.coerceIn(pad, h - pad))
+        val (tapLat, tapLng) = toLatLng(cursor)
+        val origin = user ?: teeP
+        val originLat = userLat ?: hole.teeLat
+        val originLng = userLng ?: hole.teeLng
+
+        val d1 = haversineMeters(originLat, originLng, tapLat, tapLng)
+        val d2 = haversineMeters(tapLat, tapLng, hole.greenLat, hole.greenLng)
+
+        // Tramo 1: origen -> cursor (sólido azul)
+        drawLine(PlayerBlue, origin, cursor, strokeWidth = 4f, cap = StrokeCap.Round)
+        // Tramo 2: cursor -> green (punteado blanco)
+        drawLine(
+            Pole.copy(alpha = 0.85f), cursor, greenP,
+            strokeWidth = 3.5f,
+            pathEffect = PathEffect.dashPathEffect(floatArrayOf(16f, 12f))
+        )
+        // Marcador del cursor: cruz + anillo
+        drawCircle(Color(0x59000000), radius = 15f, center = cursor + Offset(2f, 3f))
+        drawCircle(Pole, radius = 13f, center = cursor, style = Stroke(width = 4f))
+        drawLine(Pole, cursor + Offset(-19f, 0f), cursor + Offset(-8f, 0f), strokeWidth = 3f, cap = StrokeCap.Round)
+        drawLine(Pole, cursor + Offset(8f, 0f), cursor + Offset(19f, 0f), strokeWidth = 3f, cap = StrokeCap.Round)
+        drawLine(Pole, cursor + Offset(0f, -19f), cursor + Offset(0f, -8f), strokeWidth = 3f, cap = StrokeCap.Round)
+        drawLine(Pole, cursor + Offset(0f, 8f), cursor + Offset(0f, 19f), strokeWidth = 3f, cap = StrokeCap.Round)
+
+        val mid1 = Offset((origin.x + cursor.x) / 2f + 30f, (origin.y + cursor.y) / 2f)
+        val mid2 = Offset((cursor.x + greenP.x) / 2f + 30f, (cursor.y + greenP.y) / 2f)
+        drawDistLabel(fmtDist(d1), mid1)
+        drawDistLabel(fmtDist(d2), mid2)
+        drawDistLabel("toca el marcador para quitarlo", Offset(w / 2f, h - 10f), 0.72f)
+    } else if (user != null && userLat != null && userLng != null) {
+        // ---- Línea directa jugador -> green ----
+        drawLine(
+            Pole.copy(alpha = 0.85f), user, greenP,
+            strokeWidth = 3.5f,
+            pathEffect = PathEffect.dashPathEffect(floatArrayOf(16f, 12f))
+        )
+        val distM = haversineMeters(userLat, userLng, hole.greenLat, hole.greenLng)
+        val mid = Offset((user.x + greenP.x) / 2f + 28f, (user.y + greenP.y) / 2f)
+        drawDistLabel(fmtDist(distM), mid)
+        drawDistLabel("toca el mapa para medir un layup", Offset(w / 2f, h - 10f), 0.72f)
+    } else {
+        drawDistLabel("toca el mapa para medir desde el tee", Offset(w / 2f, h - 10f), 0.72f)
+    }
+
+    // ---- Punto del jugador (siempre encima de las líneas) ----
+    if (user != null) {
+        drawCircle(PlayerBlue.copy(alpha = 0.28f), radius = 20f, center = user)
+        drawCircle(Pole, radius = 10f, center = user)
+        drawCircle(PlayerBlue, radius = 7f, center = user)
+        if (offMap) drawDistLabel("(fuera del mapa)", user + Offset(0f, 34f), 0.8f)
     }
 }

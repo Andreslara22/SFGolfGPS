@@ -24,7 +24,10 @@ class MainActivity : ComponentActivity() {
 
     private val locationListener = object : LocationListener {
         override fun onLocationChanged(location: Location) {
-            vm.onLocation(location.latitude, location.longitude, location.accuracy)
+            vm.onLocation(
+                location.latitude, location.longitude, location.accuracy,
+                if (location.hasAltitude()) location.altitude else null
+            )
         }
         @Deprecated("Deprecated in API")
         override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
@@ -95,7 +98,10 @@ class MainActivity : ComponentActivity() {
                     locationListener
                 )
                 lm.getLastKnownLocation(LocationManager.GPS_PROVIDER)?.let {
-                    vm.onLocation(it.latitude, it.longitude, it.accuracy)
+                    vm.onLocation(
+                        it.latitude, it.longitude, it.accuracy,
+                        if (it.hasAltitude()) it.altitude else null
+                    )
                 }
             }
         } catch (_: SecurityException) {
