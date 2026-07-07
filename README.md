@@ -12,6 +12,8 @@ embebidos localmente. Funciona sin internet.
 - **Detección automática de hoyo** por el tee más cercano, con botones ◀ / ▶ para cambio manual y botón AUTO para volver.
 - **Palo sugerido** según la distancia al green.
 - **Contador de golpes hasta 5 jugadores**, con tarjeta completa: OUT / IN / TOTAL y diferencial vs par (birdies en verde, bogeys en rojo).
+- **Stats de ronda**: putts por hoyo y fairway ✓/✗ (par 4/5) directo en la tarjeta de golpes; GIR se deriva automáticamente (golpes − putts ≤ par − 2). Resumen FIR / GIR / putts por jugador en el Scorecard y en el historial de rondas guardadas.
+- **Juegos**: **Skins** con acarreo de empates para 2-5 jugadores (corona 👑 al líder y pozo acarreado visible) y **Match Play** clásico para 2 jugadores ("2 UP thru 7", "gana 3&2"). Todo calculado en vivo de los golpes ya anotados, sin captura extra.
 - **Tema oscuro verde** (fairway) + tema claro + modo sistema.
 - **Yardas / metros** configurables.
 - Pantalla siempre encendida durante la ronda.

@@ -16,13 +16,21 @@ enum class ThemeMode { SYSTEM, LIGHT, DARK }
 class Player(
     name: String,
     strokes: List<Int> = List(18) { 0 },
-    clubs: List<Int> = defaultClubYards
+    clubs: List<Int> = defaultClubYards,
+    putts: List<Int> = List(18) { 0 },
+    fir: List<Int> = List(18) { -1 }
 ) {
     var name by mutableStateOf(name)
     val strokes = mutableStateListOf<Int>().apply { addAll(strokes) }
     val clubYards = mutableStateListOf<Int>().apply { addAll(clubs) }
 
+    /** Putts por hoyo (0 = sin registrar). */
+    val putts = mutableStateListOf<Int>().apply { addAll(putts) }
+    /** Fairway por hoyo: -1 sin dato · 0 fallado · 1 acertado. Solo aplica en par 4/5. */
+    val fir = mutableStateListOf<Int>().apply { addAll(fir) }
+
     fun total(): Int = strokes.sum()
+    fun totalPutts(): Int = putts.sum()
 
     /** Score vs par counting only holes with recorded strokes. */
     fun relativeToPar(): Int {
@@ -34,13 +42,42 @@ class Player(
     }
 
     fun playedHoles(): Int = strokes.count { it > 0 }
+
+    /**
+     * Greens in regulation: llegaste al green en (par − 2) golpes.
+     * Derivado de golpes − putts, solo en hoyos con ambos registrados.
+     */
+    fun girCount(): Int {
+        var gir = 0
+        strokes.forEachIndexed { i, s ->
+            val p = putts[i]
+            if (s > 0 && p > 0 && s - p <= CourseData.holes[i].par - 2) gir++
+        }
+        return gir
+    }
+
+    /** Hoyos con golpes Y putts registrados (denominador del GIR%). */
+    fun girTracked(): Int = strokes.indices.count { strokes[it] > 0 && putts[it] > 0 }
+
+    /** Fairways: Pair(acertados, intentados) en par 4/5 con dato. */
+    fun firStats(): Pair<Int, Int> {
+        var hit = 0; var att = 0
+        fir.forEachIndexed { i, v ->
+            if (CourseData.holes[i].par >= 4 && v >= 0) { att++; if (v == 1) hit++ }
+        }
+        return hit to att
+    }
 }
 
 class SavedRound(
     val date: Long,
     val entries: List<Entry>
 ) {
-    class Entry(val name: String, val strokes: Int, val relative: Int, val holes: Int)
+    class Entry(
+        val name: String, val strokes: Int, val relative: Int, val holes: Int,
+        val putts: Int = 0, val gir: Int = 0, val girTracked: Int = 0,
+        val firHit: Int = 0, val firAtt: Int = 0
+    )
 }
 
 /** Auto hole switching only engages within this distance of a tee (meters). */
@@ -227,6 +264,87 @@ class GolfViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // --- Putts y fairways ---
+    fun addPutt(playerIdx: Int, holeIdx: Int = currentHoleIndex) {
+        if (playerIdx in players.indices) {
+            val p = players[playerIdx]
+            if (p.putts[holeIdx] < 9) p.putts[holeIdx] = p.putts[holeIdx] + 1
+            saveState()
+        }
+    }
+
+    fun removePutt(playerIdx: Int, holeIdx: Int = currentHoleIndex) {
+        if (playerIdx in players.indices) {
+            val p = players[playerIdx]
+            if (p.putts[holeIdx] > 0) p.putts[holeIdx] = p.putts[holeIdx] - 1
+            saveState()
+        }
+    }
+
+    /** Cicla el fairway: sin dato -> acertado -> fallado -> sin dato. */
+    fun cycleFir(playerIdx: Int, holeIdx: Int = currentHoleIndex) {
+        if (playerIdx in players.indices) {
+            val p = players[playerIdx]
+            p.fir[holeIdx] = when (p.fir[holeIdx]) { -1 -> 1; 1 -> 0; else -> -1 }
+            saveState()
+        }
+    }
+
+    // --- Juegos ---
+
+    /**
+     * Skins con acarreo: en cada hoyo donde TODOS los jugadores registraron
+     * golpes, el score único más bajo gana el pozo (1 skin + acarreados).
+     * Empate en el más bajo -> el pozo se acarrea al siguiente hoyo completo.
+     * Devuelve skins ganados por jugador y el pozo pendiente.
+     */
+    fun skinsStandings(): Pair<List<Int>, Int> {
+        val won = IntArray(players.size)
+        var pot = 0
+        for (h in 0 until 18) {
+            val scores = players.map { it.strokes[h] }
+            if (scores.any { it == 0 }) continue // hoyo incompleto: no cuenta ni acarrea
+            pot += 1
+            val minScore = scores.min()
+            val winners = scores.withIndex().filter { it.value == minScore }
+            if (winners.size == 1) {
+                won[winners.first().index] += pot
+                pot = 0
+            } // empate: pot se acarrea
+        }
+        return won.toList() to pot
+    }
+
+    /**
+     * Match play clásico para exactamente 2 jugadores.
+     * Devuelve el estado legible ("Andres 2 UP thru 7", "All square thru 7",
+     * "Andres gana 3&2") o null si no aplica.
+     */
+    fun matchPlayStatus(): String? {
+        if (players.size != 2) return null
+        val a = players[0]; val b = players[1]
+        var diff = 0 // >0 = jugador A arriba
+        var thru = 0
+        var decidedAt = -1
+        for (h in 0 until 18) {
+            if (a.strokes[h] == 0 || b.strokes[h] == 0) continue
+            thru = h + 1
+            if (a.strokes[h] < b.strokes[h]) diff++
+            else if (b.strokes[h] < a.strokes[h]) diff--
+            val remaining = 18 - (h + 1)
+            if (decidedAt < 0 && kotlin.math.abs(diff) > remaining) decidedAt = h + 1
+        }
+        if (thru == 0) return null
+        val leader = if (diff > 0) a.name else b.name
+        val up = kotlin.math.abs(diff)
+        return when {
+            decidedAt > 0 -> "$leader gana $up&${18 - decidedAt}"
+            diff == 0 -> "All square · thru $thru"
+            thru == 18 -> "$leader gana $up UP"
+            else -> "$leader $up UP · thru $thru"
+        }
+    }
+
     // --- Players ---
     fun addPlayer() {
         if (players.size < 5) {
@@ -284,12 +402,18 @@ class GolfViewModel(app: Application) : AndroidViewModel(app) {
             history.add(0, SavedRound(
                 date = System.currentTimeMillis(),
                 entries = players.map {
-                    SavedRound.Entry(it.name, it.total(), it.relativeToPar(), it.playedHoles())
+                    val (fh, fa) = it.firStats()
+                    SavedRound.Entry(
+                        it.name, it.total(), it.relativeToPar(), it.playedHoles(),
+                        it.totalPutts(), it.girCount(), it.girTracked(), fh, fa
+                    )
                 }
             ))
             while (history.size > 30) history.removeAt(history.size - 1)
         }
-        players.forEach { p -> for (i in 0 until 18) p.strokes[i] = 0 }
+        players.forEach { p ->
+            for (i in 0 until 18) { p.strokes[i] = 0; p.putts[i] = 0; p.fir[i] = -1 }
+        }
         for (i in 0 until 18) flags[i] = -1
         currentHoleIndex = 0
         autoDetect = false
@@ -298,7 +422,9 @@ class GolfViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Clears current strokes without saving to history. */
     fun clearStrokes() {
-        players.forEach { p -> for (i in 0 until 18) p.strokes[i] = 0 }
+        players.forEach { p ->
+            for (i in 0 until 18) { p.strokes[i] = 0; p.putts[i] = 0; p.fir[i] = -1 }
+        }
         for (i in 0 until 18) flags[i] = -1
         currentHoleIndex = 0
         saveState()
@@ -322,7 +448,9 @@ class GolfViewModel(app: Application) : AndroidViewModel(app) {
             r.entries.forEach { e ->
                 entries.put(JSONObject()
                     .put("n", e.name).put("s", e.strokes)
-                    .put("r", e.relative).put("h", e.holes))
+                    .put("r", e.relative).put("h", e.holes)
+                    .put("p", e.putts).put("g", e.gir).put("gt", e.girTracked)
+                    .put("fh", e.firHit).put("fa", e.firAtt))
             }
             historyJson.put(JSONObject().put("d", r.date).put("e", entries))
         }
@@ -330,6 +458,8 @@ class GolfViewModel(app: Application) : AndroidViewModel(app) {
             .putString("names", players.joinToString("|") { it.name })
             .putString("scores", players.joinToString("|") { p -> p.strokes.joinToString(",") })
             .putString("clubs", players.joinToString("|") { p -> p.clubYards.joinToString(",") })
+            .putString("putts", players.joinToString("|") { p -> p.putts.joinToString(",") })
+            .putString("firs", players.joinToString("|") { p -> p.fir.joinToString(",") })
             .putString("flags", flags.joinToString(","))
             .putString("units", units.name)
             .putString("theme", themeMode.name)
@@ -357,7 +487,11 @@ class GolfViewModel(app: Application) : AndroidViewModel(app) {
                 val es = o.getJSONArray("e")
                 val entries = (0 until es.length()).map { j ->
                     val e = es.getJSONObject(j)
-                    SavedRound.Entry(e.getString("n"), e.getInt("s"), e.getInt("r"), e.getInt("h"))
+                    SavedRound.Entry(
+                        e.getString("n"), e.getInt("s"), e.getInt("r"), e.getInt("h"),
+                        e.optInt("p"), e.optInt("g"), e.optInt("gt"),
+                        e.optInt("fh"), e.optInt("fa")
+                    )
                 }
                 history.add(SavedRound(o.getLong("d"), entries))
             }
@@ -366,6 +500,8 @@ class GolfViewModel(app: Application) : AndroidViewModel(app) {
         val names = prefs.getString("names", null)?.split("|")?.filter { it.isNotBlank() } ?: return
         val scores = prefs.getString("scores", null)?.split("|") ?: return
         val clubs = prefs.getString("clubs", null)?.split("|")
+        val puttsAll = prefs.getString("putts", null)?.split("|")
+        val firsAll = prefs.getString("firs", null)?.split("|")
         names.forEachIndexed { i, name ->
             val strokes = scores.getOrNull(i)
                 ?.split(",")
@@ -377,7 +513,13 @@ class GolfViewModel(app: Application) : AndroidViewModel(app) {
                 ?.mapNotNull { it.toIntOrNull() }
                 ?.takeIf { it.size == clubNames.size }
                 ?: defaultClubYards
-            if (players.size < 5) players.add(Player(name, strokes, clubList))
+            val puttList = puttsAll?.getOrNull(i)
+                ?.split(",")?.mapNotNull { it.toIntOrNull() }
+                ?.takeIf { it.size == 18 } ?: List(18) { 0 }
+            val firList = firsAll?.getOrNull(i)
+                ?.split(",")?.mapNotNull { it.toIntOrNull() }
+                ?.takeIf { it.size == 18 } ?: List(18) { -1 }
+            if (players.size < 5) players.add(Player(name, strokes, clubList, puttList, firList))
         }
     }
 }

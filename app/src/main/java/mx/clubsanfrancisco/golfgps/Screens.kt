@@ -368,7 +368,13 @@ private fun RangeScreen(vm: GolfViewModel, onRequestPermission: () -> Unit) {
                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                     vm.addStroke(i)
                 },
-                onRemove = { vm.removeStroke(i) }
+                onRemove = { vm.removeStroke(i) },
+                putts = player.putts[vm.currentHoleIndex],
+                onPuttAdd = { vm.addPutt(i) },
+                onPuttRemove = { vm.removePutt(i) },
+                fir = player.fir[vm.currentHoleIndex],
+                onFirCycle = { vm.cycleFir(i) },
+                showFir = hole.par >= 4
             )
             Spacer(Modifier.height(8.dp))
         }
@@ -414,6 +420,20 @@ private fun FcbLabel(letter: String, value: Int) {
 }
 
 @Composable
+private fun StatBadge(label: String, value: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = 10.sp
+        )
+        Text(value, fontWeight = FontWeight.Black, fontSize = 14.sp)
+    }
+}
+
+@Composable
 private fun Pill(text: String, bg: Color, fg: Color) {
     Surface(shape = RoundedCornerShape(50), color = bg) {
         Text(
@@ -427,46 +447,114 @@ private fun Pill(text: String, bg: Color, fg: Color) {
 }
 
 @Composable
-private fun StrokeRow(name: String, strokes: Int, par: Int, onAdd: () -> Unit, onRemove: () -> Unit) {
+private fun StrokeRow(
+    name: String, strokes: Int, par: Int,
+    onAdd: () -> Unit, onRemove: () -> Unit,
+    putts: Int = 0, onPuttAdd: () -> Unit = {}, onPuttRemove: () -> Unit = {},
+    fir: Int = -1, onFirCycle: () -> Unit = {}, showFir: Boolean = false
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
-        Row(
-            Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(name, fontWeight = FontWeight.SemiBold)
-                if (strokes > 0) {
-                    val diff = strokes - par
-                    Text(
-                        scoreName(diff),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = scoreColor(diff)
-                    )
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(name, fontWeight = FontWeight.SemiBold)
+                    if (strokes > 0) {
+                        val diff = strokes - par
+                        Text(
+                            scoreName(diff),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = scoreColor(diff)
+                        )
+                    }
+                }
+                OutlinedButton(
+                    onClick = onRemove,
+                    shape = CircleShape,
+                    contentPadding = PaddingValues(0.dp),
+                    modifier = Modifier.size(44.dp)
+                ) { Text("−", fontSize = 22.sp) }
+                Text(
+                    strokes.toString(),
+                    modifier = Modifier.width(52.dp),
+                    textAlign = TextAlign.Center,
+                    fontSize = 26.sp,
+                    fontWeight = FontWeight.Black
+                )
+                Button(
+                    onClick = onAdd,
+                    shape = CircleShape,
+                    contentPadding = PaddingValues(0.dp),
+                    modifier = Modifier.size(44.dp)
+                ) { Text("+", fontSize = 22.sp) }
+            }
+            // Fila de stats: putts + fairway (fairway solo en par 4/5)
+            Row(
+                Modifier.padding(top = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "PUTTS",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    "−",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .clickable(onClick = onPuttRemove)
+                        .padding(horizontal = 10.dp, vertical = 2.dp)
+                )
+                Text(
+                    putts.toString(),
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Black,
+                    modifier = Modifier.width(24.dp),
+                    textAlign = TextAlign.Center
+                )
+                Text(
+                    "+",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .clickable(onClick = onPuttAdd)
+                        .padding(horizontal = 10.dp, vertical = 2.dp)
+                )
+                if (showFir) {
+                    Spacer(Modifier.weight(1f))
+                    val (label, bg, fg) = when (fir) {
+                        1 -> Triple("FAIRWAY ✓", MaterialTheme.colorScheme.primaryContainer,
+                                    MaterialTheme.colorScheme.onPrimaryContainer)
+                        0 -> Triple("FAIRWAY ✗", MaterialTheme.colorScheme.errorContainer,
+                                    MaterialTheme.colorScheme.onErrorContainer)
+                        else -> Triple("FAIRWAY —", MaterialTheme.colorScheme.surfaceVariant,
+                                       MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(50),
+                        color = bg,
+                        modifier = Modifier.clip(RoundedCornerShape(50)).clickable(onClick = onFirCycle)
+                    ) {
+                        Text(
+                            label,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                            color = fg
+                        )
+                    }
                 }
             }
-            OutlinedButton(
-                onClick = onRemove,
-                shape = CircleShape,
-                contentPadding = PaddingValues(0.dp),
-                modifier = Modifier.size(44.dp)
-            ) { Text("−", fontSize = 22.sp) }
-            Text(
-                strokes.toString(),
-                modifier = Modifier.width(52.dp),
-                textAlign = TextAlign.Center,
-                fontSize = 26.sp,
-                fontWeight = FontWeight.Black
-            )
-            Button(
-                onClick = onAdd,
-                shape = CircleShape,
-                contentPadding = PaddingValues(0.dp),
-                modifier = Modifier.size(44.dp)
-            ) { Text("+", fontSize = 22.sp) }
         }
     }
 }
@@ -557,6 +645,113 @@ private fun ScorecardScreen(vm: GolfViewModel) {
                 textAlign = TextAlign.Center
             )
             Spacer(Modifier.height(14.dp))
+
+            // ---- Stats de la ronda actual ----
+            if (vm.players.any { it.playedHoles() > 0 }) {
+                Text("🎯 Round stats", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(8.dp))
+                Card(
+                    Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                        vm.players.filter { it.playedHoles() > 0 }.forEach { p ->
+                            val (fh, fa) = p.firStats()
+                            val girT = p.girTracked()
+                            Row(
+                                Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    p.name.take(10),
+                                    Modifier.weight(1f),
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 14.sp
+                                )
+                                StatBadge("FIR", if (fa > 0) "$fh/$fa" else "—")
+                                Spacer(Modifier.width(10.dp))
+                                StatBadge("GIR", if (girT > 0) "${p.girCount()}/$girT" else "—")
+                                Spacer(Modifier.width(10.dp))
+                                StatBadge("PUTTS", if (p.totalPutts() > 0) "${p.totalPutts()}" else "—")
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(14.dp))
+            }
+
+            // ---- Juegos: Skins + Match Play ----
+            if (vm.players.size >= 2) {
+                Text("🏆 Games", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(8.dp))
+                Card(
+                    Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                        val (skins, pot) = vm.skinsStandings()
+                        Text(
+                            "SKINS",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (skins.all { it == 0 } && pot == 0) {
+                            Text(
+                                "Anota los golpes de todos los jugadores en un hoyo y aquí aparecen los skins. Empates se acarrean.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        } else {
+                            val leaderSkins = skins.max()
+                            vm.players.forEachIndexed { i, p ->
+                                Row(
+                                    Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        (if (skins[i] == leaderSkins && leaderSkins > 0) "👑 " else "") + p.name.take(12),
+                                        Modifier.weight(1f),
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 14.sp
+                                    )
+                                    Text(
+                                        "${skins[i]} skin${if (skins[i] == 1) "" else "s"}",
+                                        fontWeight = FontWeight.Black,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                            if (pot > 0) {
+                                Text(
+                                    "🔥 $pot skin${if (pot == 1) "" else "s"} acarreado${if (pot == 1) "" else "s"} al siguiente hoyo",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                        vm.matchPlayStatus()?.let { status ->
+                            Spacer(Modifier.height(10.dp))
+                            Text(
+                                "MATCH PLAY",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                status,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Black,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(14.dp))
+            }
 
             Button(
                 onClick = { showFinishDialog = true },
@@ -669,6 +864,18 @@ private fun RoundHistoryCard(round: SavedRound, fmt: SimpleDateFormat, onDelete:
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    val bits = buildList {
+                        if (e.firAtt > 0) add("FIR ${e.firHit}/${e.firAtt}")
+                        if (e.girTracked > 0) add("GIR ${e.gir}/${e.girTracked}")
+                        if (e.putts > 0) add("${e.putts} putts")
+                    }
+                    if (bits.isNotEmpty()) {
+                        Text(
+                            "    " + bits.joinToString(" · "),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
             }
             TextButton(onClick = onDelete) {
