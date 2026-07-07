@@ -9,7 +9,10 @@ data class WHole(
     val number: Int, val par: Int,
     val teeLat: Double, val teeLng: Double,
     val greenLat: Double, val greenLng: Double
-)
+) {
+    /** Profundidad del green en metros (misma tabla que la app de teléfono). */
+    val depthM: Double get() = when (par) { 3 -> 22.0; 5 -> 30.0; else -> 26.0 }
+}
 
 object WearCourse {
     val holes = listOf(

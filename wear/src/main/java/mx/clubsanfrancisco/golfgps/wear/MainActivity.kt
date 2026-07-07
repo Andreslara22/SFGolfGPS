@@ -11,6 +11,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -49,6 +52,7 @@ class MainActivity : ComponentActivity() {
     private var holeIdx by mutableStateOf(0)
     private var auto by mutableStateOf(true)
     private val strokes = mutableStateListOf<Int>().apply { repeat(18) { add(0) } }
+    private val putts = mutableStateListOf<Int>().apply { repeat(18) { add(0) } }
 
     private val listener = object : LocationListener {
         override fun onLocationChanged(l: Location) {
@@ -77,10 +81,12 @@ class MainActivity : ComponentActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         lm = getSystemService(LOCATION_SERVICE) as LocationManager
 
-        // Restore strokes
-        val saved = getSharedPreferences("wear", MODE_PRIVATE)
-            .getString("strokes", null)?.split(",")?.mapNotNull { it.toIntOrNull() }
-        if (saved?.size == 18) saved.forEachIndexed { i, v -> strokes[i] = v }
+        // Restore strokes + putts
+        val prefs = getSharedPreferences("wear", MODE_PRIVATE)
+        prefs.getString("strokes", null)?.split(",")?.mapNotNull { it.toIntOrNull() }
+            ?.takeIf { it.size == 18 }?.forEachIndexed { i, v -> strokes[i] = v }
+        prefs.getString("putts", null)?.split(",")?.mapNotNull { it.toIntOrNull() }
+            ?.takeIf { it.size == 18 }?.forEachIndexed { i, v -> putts[i] = v }
 
         setContent { WatchApp() }
 
@@ -106,7 +112,9 @@ class MainActivity : ComponentActivity() {
 
     private fun persist() {
         getSharedPreferences("wear", MODE_PRIVATE).edit()
-            .putString("strokes", strokes.joinToString(",")).apply()
+            .putString("strokes", strokes.joinToString(","))
+            .putString("putts", putts.joinToString(","))
+            .apply()
     }
 
     override fun onDestroy() {
@@ -119,11 +127,18 @@ class MainActivity : ComponentActivity() {
         MaterialTheme {
             Scaffold(timeText = { TimeText() }) {
                 val hole = WearCourse.holes[holeIdx]
-                val dist = if (lat != null && lng != null)
-                    yards(meters(lat!!, lng!!, hole.greenLat, hole.greenLng)) else null
+                val distM = if (lat != null && lng != null)
+                    meters(lat!!, lng!!, hole.greenLat, hole.greenLng) else null
+                val dist = distM?.let { yards(it) }
+                val half = hole.depthM / 2.0
+                val fY = distM?.let { yards((it - half).coerceAtLeast(0.0)) }
+                val bY = distM?.let { yards(it + half) }
 
                 Column(
-                    Modifier.fillMaxSize(),
+                    Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(vertical = 26.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
@@ -133,12 +148,27 @@ class MainActivity : ComponentActivity() {
                         color = Mint,
                         fontWeight = FontWeight.Bold
                     )
-                    Text(
-                        dist?.toString() ?: (if (granted) "– – –" else "GPS?"),
-                        fontSize = 46.sp,
-                        fontWeight = FontWeight.Black,
-                        color = Color.White
-                    )
+                    // F / distancia grande / B
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("F", fontSize = 10.sp, color = Dim, fontWeight = FontWeight.Bold)
+                            Text(fY?.toString() ?: "–", fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold, color = Color.White)
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            dist?.toString() ?: (if (granted) "– – –" else "GPS?"),
+                            fontSize = 44.sp,
+                            fontWeight = FontWeight.Black,
+                            color = Color.White
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("B", fontSize = 10.sp, color = Dim, fontWeight = FontWeight.Bold)
+                            Text(bY?.toString() ?: "–", fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold, color = Color.White)
+                        }
+                    }
                     Text("yd to green", fontSize = 11.sp, color = Dim)
                     Spacer(Modifier.height(6.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -162,6 +192,7 @@ class MainActivity : ComponentActivity() {
                         ) { Text("▶", fontSize = 13.sp) }
                     }
                     Spacer(Modifier.height(6.dp))
+                    Text("STROKES", fontSize = 9.sp, color = Dim, fontWeight = FontWeight.Bold)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Button(
                             onClick = { if (strokes[holeIdx] > 0) { strokes[holeIdx]--; persist() } },
@@ -180,6 +211,44 @@ class MainActivity : ComponentActivity() {
                             onClick = { if (strokes[holeIdx] < 15) { strokes[holeIdx]++; persist() } },
                             modifier = Modifier.size(38.dp)
                         ) { Text("+", fontSize = 17.sp) }
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Text("PUTTS", fontSize = 9.sp, color = Dim, fontWeight = FontWeight.Bold)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Button(
+                            onClick = { if (putts[holeIdx] > 0) { putts[holeIdx]--; persist() } },
+                            modifier = Modifier.size(32.dp),
+                            colors = ButtonDefaults.secondaryButtonColors()
+                        ) { Text("−", fontSize = 15.sp) }
+                        Text(
+                            "${putts[holeIdx]}",
+                            Modifier.width(40.dp),
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Black,
+                            color = Color.White,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                        Button(
+                            onClick = { if (putts[holeIdx] < 9) { putts[holeIdx]++; persist() } },
+                            modifier = Modifier.size(32.dp),
+                            colors = ButtonDefaults.secondaryButtonColors()
+                        ) { Text("+", fontSize = 15.sp) }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    // Resumen de ronda
+                    val played = strokes.count { it > 0 }
+                    if (played > 0) {
+                        var rel = 0
+                        strokes.forEachIndexed { i, st ->
+                            if (st > 0) rel += st - WearCourse.holes[i].par
+                        }
+                        val relTxt = when { rel == 0 -> "E"; rel > 0 -> "+$rel"; else -> "$rel" }
+                        Text(
+                            "TOTAL ${strokes.sum()} · $relTxt · thru $played",
+                            fontSize = 11.sp,
+                            color = Mint,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
             }

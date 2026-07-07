@@ -16,6 +16,7 @@ embebidos localmente. Funciona sin internet.
 - **Juegos**: **Skins** con acarreo de empates para 2-5 jugadores (corona 👑 al líder y pozo acarreado visible) y **Match Play** clásico para 2 jugadores ("2 UP thru 7", "gana 3&2"). Todo calculado en vivo de los golpes ya anotados, sin captura extra.
 - **Tema oscuro verde** (fairway) + tema claro + modo sistema.
 - **Yardas / metros** configurables.
+- **Wear OS mejorado**: F/C/B alrededor de la distancia grande, contador de putts y resumen de ronda ("TOTAL 42 · +6 · thru 9") directo en el reloj, con scroll para pantallas chicas.
 - Pantalla siempre encendida durante la ronda.
 - Golpes y ajustes se guardan aunque cierres la app (SharedPreferences).
 
