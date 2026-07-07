@@ -1,7 +1,11 @@
 package mx.clubsanfrancisco.golfgps
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -13,6 +17,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -59,6 +65,23 @@ private val Pole = Color(0xFFFFFDF6)
 private val PlayerBlue = Color(0xFF3D8BFF)
 private val LineDark = Color(0xFF4E5A42)
 
+/**
+ * Ilustración custom por hoyo. Anclajes en fracciones de la imagen
+ * (medidos por pixel-scan): posición del tee y del centro del green.
+ * Con esos dos puntos se calibra la transformación lat/lng -> pantalla
+ * para que el punto GPS, la línea a green y el cursor caigan exactos.
+ */
+private data class HoleArt(
+    val resId: Int,
+    val teeAnchor: Offset,
+    val greenAnchor: Offset,
+    val aspect: Float
+)
+
+private val holeArt: Map<Int, HoleArt> = mapOf(
+    1 to HoleArt(R.drawable.hole_1, Offset(0.526f, 0.884f), Offset(0.420f, 0.143f), 1000f / 890f)
+)
+
 @Composable
 fun HoleMapCard(hole: Hole, userLat: Double?, userLng: Double?, units: Units) {
     val density = LocalDensity.current
@@ -67,6 +90,40 @@ fun HoleMapCard(hole: Hole, userLat: Double?, userLng: Double?, units: Units) {
     // Cursor de medición: toca el mapa para medir a ese punto (layups).
     // Se reinicia al cambiar de hoyo. Tocar cerca del cursor lo quita.
     var tapPoint by remember(hole.number) { mutableStateOf<Offset?>(null) }
+
+    val art = holeArt[hole.number]
+    if (art != null) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(art.aspect),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = Waste)
+        ) {
+            Box(Modifier.fillMaxSize()) {
+                Image(
+                    painter = painterResource(art.resId),
+                    contentDescription = "Hoyo ${hole.number}",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.FillBounds
+                )
+                Canvas(
+                    Modifier
+                        .fillMaxSize()
+                        .pointerInput(hole.number) {
+                            detectTapGestures { tap ->
+                                val current = tapPoint
+                                tapPoint = if (current != null &&
+                                    (current - tap).getDistance() < 44f) null else tap
+                            }
+                        }
+                ) {
+                    drawArtOverlay(hole, art, userLat, userLng, units, labelPx, tapPoint)
+                }
+            }
+        }
+        return
+    }
 
     Card(
         modifier = Modifier
@@ -89,6 +146,133 @@ fun HoleMapCard(hole: Hole, userLat: Double?, userLng: Double?, units: Units) {
         ) {
             drawHoleMap(hole, userLat, userLng, units, labelPx, tapPoint)
         }
+    }
+}
+
+/**
+ * Overlay GPS sobre la ilustración: transformación de similitud
+ * (rotación + escala + traslación) que lleva tee->teeAnchor y
+ * green->greenAnchor. Todo lo geográfico cae calibrado sobre el arte.
+ */
+private fun DrawScope.drawArtOverlay(
+    hole: Hole,
+    art: HoleArt,
+    userLat: Double?,
+    userLng: Double?,
+    units: Units,
+    labelPx: Float,
+    tapPoint: Offset?
+) {
+    val w = size.width
+    val h = size.height
+
+    val lat0 = (hole.teeLat + hole.greenLat) / 2
+    val lng0 = (hole.teeLng + hole.greenLng) / 2
+    fun local(lat: Double, lng: Double): Offset {
+        val x = ((lng - lng0) * cos(Math.toRadians(lat0)) * 111320.0).toFloat()
+        val y = (-(lat - lat0) * 110540.0).toFloat()
+        return Offset(x, y)
+    }
+    val teeL = local(hole.teeLat, hole.teeLng)
+    val greenL = local(hole.greenLat, hole.greenLng)
+    val teeP = Offset(art.teeAnchor.x * w, art.teeAnchor.y * h)
+    val greenP = Offset(art.greenAnchor.x * w, art.greenAnchor.y * h)
+
+    val src = greenL - teeL
+    val dst = greenP - teeP
+    val ang = atan2(dst.y, dst.x) - atan2(src.y, src.x)
+    val sc = dst.getDistance() / src.getDistance().coerceAtLeast(0.001f)
+    val ca = cos(ang); val sa = sin(ang)
+    fun toScreen(p: Offset): Offset {
+        val q = p - teeL
+        return Offset(
+            teeP.x + (q.x * ca - q.y * sa) * sc,
+            teeP.y + (q.x * sa + q.y * ca) * sc
+        )
+    }
+    fun toLatLng(s: Offset): Pair<Double, Double> {
+        val q = (s - teeP) / sc
+        val px = q.x * ca + q.y * sa
+        val py = -q.x * sa + q.y * ca
+        val lx = px + teeL.x
+        val ly = py + teeL.y
+        val lat = lat0 - ly / 110540.0
+        val lng = lng0 + lx / (cos(Math.toRadians(lat0)) * 111320.0)
+        return lat to lng
+    }
+
+    fun fmtDist(m: Double): String = if (units == Units.YARDS)
+        "${metersToYards(m).roundToInt()} yd" else "${m.roundToInt()} m"
+    fun drawDistLabel(text: String, at: Offset, sizeFactor: Float = 1f) {
+        drawIntoCanvas { canvas ->
+            val paint = android.graphics.Paint().apply {
+                color = android.graphics.Color.WHITE
+                textSize = labelPx * sizeFactor
+                isFakeBoldText = true
+                textAlign = android.graphics.Paint.Align.CENTER
+                setShadowLayer(6f, 0f, 2f, android.graphics.Color.argb(200, 46, 56, 38))
+                isAntiAlias = true
+            }
+            canvas.nativeCanvas.drawText(text, at.x, at.y, paint)
+        }
+    }
+
+    val pad = 18f
+    var user: Offset? = null
+    var offMap = false
+    if (userLat != null && userLng != null) {
+        val raw = toScreen(local(userLat, userLng))
+        user = Offset(raw.x.coerceIn(pad, w - pad), raw.y.coerceIn(pad, h - pad))
+        offMap = raw != user
+    }
+
+    if (tapPoint != null) {
+        val cursor = Offset(tapPoint.x.coerceIn(pad, w - pad), tapPoint.y.coerceIn(pad, h - pad))
+        val (tapLat, tapLng) = toLatLng(cursor)
+        val origin = user ?: teeP
+        val originLat = userLat ?: hole.teeLat
+        val originLng = userLng ?: hole.teeLng
+
+        val d1 = haversineMeters(originLat, originLng, tapLat, tapLng)
+        val d2 = haversineMeters(tapLat, tapLng, hole.greenLat, hole.greenLng)
+
+        drawLine(PlayerBlue, origin, cursor, strokeWidth = 4f, cap = StrokeCap.Round)
+        drawLine(
+            LineDark.copy(alpha = 0.85f), cursor, greenP,
+            strokeWidth = 3.5f,
+            pathEffect = PathEffect.dashPathEffect(floatArrayOf(16f, 12f))
+        )
+        drawCircle(Color(0x59000000), radius = 15f, center = cursor + Offset(2f, 3f))
+        drawCircle(Pole, radius = 13f, center = cursor, style = Stroke(width = 4f))
+        drawLine(Pole, cursor + Offset(-19f, 0f), cursor + Offset(-8f, 0f), strokeWidth = 3f, cap = StrokeCap.Round)
+        drawLine(Pole, cursor + Offset(8f, 0f), cursor + Offset(19f, 0f), strokeWidth = 3f, cap = StrokeCap.Round)
+        drawLine(Pole, cursor + Offset(0f, -19f), cursor + Offset(0f, -8f), strokeWidth = 3f, cap = StrokeCap.Round)
+        drawLine(Pole, cursor + Offset(0f, 8f), cursor + Offset(0f, 19f), strokeWidth = 3f, cap = StrokeCap.Round)
+
+        val mid1 = Offset((origin.x + cursor.x) / 2f + 30f, (origin.y + cursor.y) / 2f)
+        val mid2 = Offset((cursor.x + greenP.x) / 2f + 30f, (cursor.y + greenP.y) / 2f)
+        drawDistLabel(fmtDist(d1), mid1)
+        drawDistLabel(fmtDist(d2), mid2)
+        drawDistLabel("toca el marcador para quitarlo", Offset(w / 2f, h - 10f), 0.72f)
+    } else if (user != null && userLat != null && userLng != null) {
+        drawLine(
+            LineDark.copy(alpha = 0.85f), user, greenP,
+            strokeWidth = 3.5f,
+            pathEffect = PathEffect.dashPathEffect(floatArrayOf(16f, 12f))
+        )
+        val distM = haversineMeters(userLat, userLng, hole.greenLat, hole.greenLng)
+        val mid = Offset((user.x + greenP.x) / 2f + 28f, (user.y + greenP.y) / 2f)
+        drawDistLabel(fmtDist(distM), mid)
+        drawDistLabel("toca el mapa para medir un layup", Offset(w / 2f, h - 10f), 0.72f)
+    } else {
+        drawDistLabel("toca el mapa para medir desde el tee", Offset(w / 2f, h - 10f), 0.72f)
+    }
+
+    if (user != null) {
+        drawCircle(PlayerBlue.copy(alpha = 0.28f), radius = 20f, center = user)
+        drawCircle(Pole, radius = 10f, center = user)
+        drawCircle(PlayerBlue, radius = 7f, center = user)
+        if (offMap) drawDistLabel("(fuera del mapa)", user + Offset(0f, 34f), 0.8f)
     }
 }
 
