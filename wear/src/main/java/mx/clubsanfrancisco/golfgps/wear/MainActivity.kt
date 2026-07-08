@@ -194,11 +194,15 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
     override fun onResume() {
         super.onResume()
         dataClient.addListener(this)
+        if (granted) startGps(fast = true)
     }
 
     override fun onPause() {
         super.onPause()
         dataClient.removeListener(this)
+        // En segundo plano (carátula visible, ronda viva por el servicio):
+        // GPS lento para no drenar batería.
+        if (granted) startGps(fast = false)
     }
 
     /**

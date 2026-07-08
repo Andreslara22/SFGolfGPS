@@ -22,12 +22,27 @@ class MainActivity : ComponentActivity() {
     private val vm: GolfViewModel by viewModels()
     private var locationManager: LocationManager? = null
 
+    // GPS adaptativo: quieto (tee/green/carrito) baja el ritmo; al moverse sube.
+    private var gpsFast = true
+    private var lastFix: Location? = null
+    private var stillSinceMs = 0L
+
     private val locationListener = object : LocationListener {
         override fun onLocationChanged(location: Location) {
             vm.onLocation(
                 location.latitude, location.longitude, location.accuracy,
                 if (location.hasAltitude()) location.altitude else null
             )
+            val prev = lastFix
+            lastFix = location
+            val now = System.currentTimeMillis()
+            val moved = prev == null || prev.distanceTo(location) > 4f
+            if (moved) {
+                stillSinceMs = now
+                if (!gpsFast) { gpsFast = true; startLocationUpdates() }
+            } else if (gpsFast && now - stillSinceMs > 20_000) {
+                gpsFast = false; startLocationUpdates()
+            }
         }
         @Deprecated("Deprecated in API")
         override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
@@ -93,8 +108,8 @@ class MainActivity : ComponentActivity() {
             if (lm.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
                 lm.requestLocationUpdates(
                     LocationManager.GPS_PROVIDER,
-                    1000L,   // cada 1 s
-                    1f,      // o cada 1 m
+                    if (gpsFast) 1000L else 6000L,  // en movimiento 1 s · quieto 6 s
+                    0f,
                     locationListener
                 )
                 lm.getLastKnownLocation(LocationManager.GPS_PROVIDER)?.let {
