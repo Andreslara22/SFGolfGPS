@@ -64,7 +64,8 @@ import kotlin.math.roundToInt
 
 private enum class Screen(val label: String, val emoji: String) {
     RANGE("Range", "⛳"),
-    SCORECARD("Scorecard", "📋"),
+    SCORECARD("Score", "📋"),
+    STATS("Stats", "📊"),
     PLAYERS("Players", "🏌️"),
     SETTINGS("Settings", "⚙️")
 }
@@ -93,6 +94,7 @@ fun GolfApp(vm: GolfViewModel, onRequestPermission: () -> Unit) {
             when (current) {
                 Screen.RANGE -> RangeScreen(vm, onRequestPermission)
                 Screen.SCORECARD -> ScorecardScreen(vm)
+                Screen.STATS -> StatsScreen(vm)
                 Screen.PLAYERS -> PlayersScreen(vm)
                 Screen.SETTINGS -> SettingsScreen(vm)
             }
@@ -316,6 +318,11 @@ private fun RangeScreen(vm: GolfViewModel, onRequestPermission: () -> Unit) {
 
             Spacer(Modifier.height(12.dp))
 
+            if (vm.hasLocationPermission) {
+                ShotMeasureCard(vm, clubYards)
+                Spacer(Modifier.height(12.dp))
+            }
+
             HoleMapCard(hole, vm.userLat, vm.userLng, vm.units, flag)
 
             Spacer(Modifier.height(12.dp))
@@ -385,6 +392,113 @@ private fun RangeScreen(vm: GolfViewModel, onRequestPermission: () -> Unit) {
         }
 
         item { Spacer(Modifier.height(16.dp)) }
+    }
+}
+
+/**
+ * Mide el vuelo de un golpe con GPS y aprende la distancia real del palo:
+ * marca la bola antes de pegar, camina hasta donde cayó y guarda. El palo
+ * queda preseleccionado con el sugerido, corregible con ‹ ›.
+ */
+@Composable
+private fun ShotMeasureCard(vm: GolfViewModel, suggestedYards: Double?) {
+    val yards = vm.units == Units.YARDS
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+            if (vm.shotClubIdx < 0) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            "📏 MEDIR GOLPE",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            "Marca la bola antes de pegar y la app aprende tus distancias reales por palo.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Button(
+                        enabled = vm.userLat != null,
+                        onClick = {
+                            val p = vm.players.getOrNull(vm.activePlayerIndex)
+                            val idx = if (suggestedYards != null && p != null)
+                                clubIndexForDistance(suggestedYards, p.clubYards) else 0
+                            vm.markShot(idx)
+                        },
+                        shape = RoundedCornerShape(14.dp)
+                    ) { Text("Marcar bola", maxLines = 1) }
+                }
+            } else {
+                val distM = vm.shotDistanceM() ?: 0.0
+                val shown = if (yards) metersToYards(distM).roundToInt() else distM.roundToInt()
+                val measuredYd = metersToYards(distM).roundToInt()
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            "📏 GOLPE EN CURSO",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                "‹",
+                                fontSize = 22.sp,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier
+                                    .clip(CircleShape)
+                                    .clickable { vm.changeShotClub(-1) }
+                                    .padding(horizontal = 8.dp)
+                            )
+                            Text(
+                                clubNames.getOrElse(vm.shotClubIdx) { "?" },
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                "›",
+                                fontSize = 22.sp,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier
+                                    .clip(CircleShape)
+                                    .clickable { vm.changeShotClub(1) }
+                                    .padding(horizontal = 8.dp)
+                            )
+                        }
+                        Text(
+                            "$shown ${if (yards) "yd" else "m"} desde la marca",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Black
+                        )
+                        Text(
+                            "Camina hasta donde cayó y guarda para afinar el palo.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Column(horizontalAlignment = Alignment.End) {
+                        Button(
+                            enabled = measuredYd in 30..350,
+                            onClick = { vm.saveShotToClub() },
+                            shape = RoundedCornerShape(14.dp)
+                        ) { Text("Guardar", maxLines = 1) }
+                        TextButton(onClick = { vm.cancelShot() }) {
+                            Text("Cancelar", color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -798,6 +912,46 @@ private fun ScorecardScreen(vm: GolfViewModel) {
                                 color = MaterialTheme.colorScheme.primary
                             )
                         }
+
+                        // ---- Stableford con handicap: puntos netos por hoyo ----
+                        if (vm.players.any { it.playedHoles() > 0 }) {
+                            Spacer(Modifier.height(10.dp))
+                            Text(
+                                "STABLEFORD · CON HANDICAP",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            val pts = vm.players.map { it.stablefordPoints() }
+                            val best = pts.max()
+                            vm.players.forEachIndexed { i, p ->
+                                Row(
+                                    Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        (if (pts[i] == best && best > 0) "👑 " else "") +
+                                            p.name.take(12) + "  · hcp ${p.hcp}",
+                                        Modifier.weight(1f),
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 14.sp
+                                    )
+                                    Text(
+                                        "${pts[i]} pts",
+                                        fontWeight = FontWeight.Black,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                            if (vm.players.all { it.hcp == 0 }) {
+                                Text(
+                                    "Par neto = 2 pts, birdie 3, bogey 1. Configura el handicap " +
+                                        "de cada jugador en Players para que reparta golpes de ventaja.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                     }
                 }
                 Spacer(Modifier.height(14.dp))
@@ -918,6 +1072,7 @@ private fun RoundHistoryCard(round: SavedRound, fmt: SimpleDateFormat, onDelete:
                         if (e.firAtt > 0) add("FIR ${e.firHit}/${e.firAtt}")
                         if (e.girTracked > 0) add("GIR ${e.gir}/${e.girTracked}")
                         if (e.putts > 0) add("${e.putts} putts")
+                        if (e.points > 0) add("${e.points} pts" + if (e.hcp > 0) " (hcp ${e.hcp})" else "")
                     }
                     if (bits.isNotEmpty()) {
                         Text(
@@ -1055,6 +1210,296 @@ private fun RelativeRow(vm: GolfViewModel) {
     }
 }
 
+// ---------------------------------------------------------------- Stats
+
+/** Nombres con historial o en la ronda actual, sin duplicar y en orden. */
+private fun statNames(vm: GolfViewModel): List<String> {
+    val names = LinkedHashSet<String>()
+    vm.players.forEach { names.add(it.name) }
+    vm.history.forEach { r -> r.entries.forEach { names.add(it.name) } }
+    return names.toList()
+}
+
+@Composable
+private fun StatsScreen(vm: GolfViewModel) {
+    val names = statNames(vm)
+    var selected by rememberSaveable {
+        mutableStateOf(vm.players.getOrNull(vm.activePlayerIndex)?.name ?: "")
+    }
+    if (selected !in names && names.isNotEmpty()) selected = names.first()
+
+    // Rondas del jugador (más nueva primero); "full" = rondas completas de 18 hoyos.
+    val entries = vm.history.mapNotNull { r ->
+        r.entries.firstOrNull { it.name == selected }
+    }
+    val full = entries.filter { it.holes == 18 }
+
+    LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+        item {
+            Spacer(Modifier.height(12.dp))
+            Text("📊 Stats", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Text(
+                "Tendencias de tus rondas guardadas",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(10.dp))
+
+            if (names.size > 1) {
+                Row(
+                    Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    names.forEach { n ->
+                        MiniChip(n.take(10), n == selected) { selected = n }
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+            }
+
+            if (entries.isEmpty()) {
+                Card(
+                    Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Text(
+                        "Aquí verás promedios, tendencia y tus hoyos más difíciles. " +
+                            "Termina y guarda rondas en el Scorecard para llenarlo. 🌱",
+                        Modifier.padding(16.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(Modifier.height(24.dp))
+                return@item
+            }
+
+            // ---- Resumen ----
+            val scores = full.map { it.strokes }
+            val puttRounds = full.filter { it.putts > 0 }
+            val girHit = entries.sumOf { it.gir }
+            val girAtt = entries.sumOf { it.girTracked }
+            val firHit = entries.sumOf { it.firHit }
+            val firAtt = entries.sumOf { it.firAtt }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                StatTile("RONDAS", "${entries.size}", Modifier.weight(1f))
+                StatTile("PROMEDIO", if (scores.isNotEmpty()) "%.1f".format(scores.average()) else "—", Modifier.weight(1f))
+                StatTile("MEJOR", if (scores.isNotEmpty()) "${scores.min()}" else "—", Modifier.weight(1f))
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                StatTile(
+                    "PUTTS/RONDA",
+                    if (puttRounds.isNotEmpty()) "%.1f".format(puttRounds.map { it.putts }.average()) else "—",
+                    Modifier.weight(1f)
+                )
+                StatTile("GIR", if (girAtt > 0) "${(girHit * 100.0 / girAtt).roundToInt()}%" else "—", Modifier.weight(1f))
+                StatTile("FIR", if (firAtt > 0) "${(firHit * 100.0 / firAtt).roundToInt()}%" else "—", Modifier.weight(1f))
+            }
+            if (scores.isEmpty()) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Promedio y mejor score usan solo rondas completas de 18 hoyos.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(Modifier.height(14.dp))
+
+            // ---- Handicap index (WHS) ----
+            Card(
+                Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(Modifier.padding(14.dp)) {
+                    Text(
+                        "HANDICAP INDEX (WHS)",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    val idx = vm.handicapIndex(selected)
+                    if (idx != null) {
+                        Text(
+                            "%.1f".format(idx),
+                            style = MaterialTheme.typography.displaySmall,
+                            fontWeight = FontWeight.Black,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            "Con ${full.size} ronda${if (full.size == 1) "" else "s"} completa${if (full.size == 1) "" else "s"} · " +
+                                "mejores diferenciales de las últimas 20 · " +
+                                "rating ${CourseData.COURSE_RATING} / slope ${CourseData.SLOPE_RATING}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        Text(
+                            "Se calcula con al menos 3 rondas completas de 18 hoyos — llevas ${full.size}.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+
+            // ---- Tendencia: últimas rondas completas (izquierda = más vieja) ----
+            val trend = full.take(10).reversed()
+            if (trend.size >= 2) {
+                Text("Tendencia", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(
+                    "Últimas ${trend.size} rondas de 18 hoyos · barra más baja = mejor score",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(8.dp))
+                Card(
+                    Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    val minS = trend.minOf { it.strokes }
+                    val maxS = trend.maxOf { it.strokes }
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.Bottom,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        trend.forEach { e ->
+                            val frac = if (maxS == minS) 0.5f
+                                       else (e.strokes - minS).toFloat() / (maxS - minS)
+                            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    "${e.strokes}",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (e.strokes == minS) MaterialTheme.colorScheme.primary
+                                            else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Box(
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .height((30 + 42 * frac).dp)
+                                        .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
+                                        .background(
+                                            if (e.strokes == minS) MaterialTheme.colorScheme.primary
+                                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+                                        )
+                                )
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(14.dp))
+            }
+
+            // ---- Promedio por hoyo: dónde pierdes golpes ----
+            val holed = full.filter { it.holeStrokes.size == 18 }
+            Text("Promedio por hoyo", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            if (holed.isEmpty()) {
+                Text(
+                    "Se llena con tus próximas rondas guardadas (las rondas viejas no " +
+                        "guardaron el detalle hoyo por hoyo).",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(24.dp))
+            } else {
+                Text(
+                    "🔥 = tus 3 hoyos más caros vs par (${holed.size} ronda${if (holed.size == 1) "" else "s"})",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(8.dp))
+                val avgs = (0 until 18).map { h ->
+                    val vals = holed.mapNotNull { e -> e.holeStrokes[h].takeIf { it > 0 } }
+                    if (vals.isEmpty()) null else vals.average()
+                }
+                val worst = avgs.mapIndexedNotNull { h, a ->
+                    a?.let { h to it - CourseData.holes[h].par }
+                }.filter { it.second > 0 }.sortedByDescending { it.second }.take(3).map { it.first }.toSet()
+                Card(
+                    Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
+                        CourseData.holes.forEachIndexed { h, hole ->
+                            val avg = avgs[h]
+                            val diff = avg?.minus(hole.par)
+                            Row(
+                                Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    "H${hole.number}" + if (h in worst) " 🔥" else "",
+                                    Modifier.width(64.dp),
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 14.sp
+                                )
+                                Text(
+                                    "Par ${hole.par}",
+                                    Modifier.width(52.dp),
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    avg?.let { "%.1f".format(it) } ?: "—",
+                                    Modifier.weight(1f),
+                                    textAlign = TextAlign.End,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp
+                                )
+                                Text(
+                                    diff?.let { if (it >= 0) "+%.1f".format(it) else "%.1f".format(it) } ?: "",
+                                    Modifier.width(58.dp),
+                                    textAlign = TextAlign.End,
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 14.sp,
+                                    color = when {
+                                        diff == null -> MaterialTheme.colorScheme.onSurfaceVariant
+                                        diff <= 0.0 -> MaterialTheme.colorScheme.primary
+                                        diff < 0.5 -> MaterialTheme.colorScheme.onSurfaceVariant
+                                        else -> MaterialTheme.colorScheme.error
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(24.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatTile(label: String, value: String, modifier: Modifier = Modifier) {
+    Card(
+        modifier,
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                label,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                fontSize = 10.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
+            )
+            Text(value, fontWeight = FontWeight.Black, fontSize = 20.sp, maxLines = 1)
+        }
+    }
+}
+
 // ---------------------------------------------------------------- Players
 
 @Composable
@@ -1076,23 +1521,63 @@ private fun PlayersScreen(vm: GolfViewModel) {
                 shape = RoundedCornerShape(18.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
-                Row(
-                    Modifier.padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    OutlinedTextField(
-                        value = name,
-                        onValueChange = {
-                            name = it.take(14)
-                            vm.renamePlayer(i, name)
-                        },
-                        label = { Text("Player ${i + 1}") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f)
-                    )
-                    if (vm.players.size > 1) {
-                        TextButton(onClick = { vm.removePlayer(i) }) {
-                            Text("Remove", color = MaterialTheme.colorScheme.error)
+                Column(Modifier.padding(12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedTextField(
+                            value = name,
+                            onValueChange = {
+                                name = it.take(14)
+                                vm.renamePlayer(i, name)
+                            },
+                            label = { Text("Player ${i + 1}") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (vm.players.size > 1) {
+                            TextButton(onClick = { vm.removePlayer(i) }) {
+                                Text("Remove", color = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                    }
+                    // Handicap de juego: reparte golpes de ventaja en Stableford.
+                    Row(
+                        Modifier.padding(top = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "HANDICAP",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        OutlinedButton(
+                            onClick = { vm.adjustHandicap(i, -1) },
+                            shape = CircleShape,
+                            contentPadding = PaddingValues(0.dp),
+                            modifier = Modifier.size(34.dp)
+                        ) { Text("−") }
+                        Text(
+                            "${player.hcp}",
+                            Modifier.width(44.dp),
+                            textAlign = TextAlign.Center,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 16.sp
+                        )
+                        OutlinedButton(
+                            onClick = { vm.adjustHandicap(i, 1) },
+                            shape = CircleShape,
+                            contentPadding = PaddingValues(0.dp),
+                            modifier = Modifier.size(34.dp)
+                        ) { Text("+") }
+                        Spacer(Modifier.weight(1f))
+                        vm.handicapIndex(player.name)?.let { idx ->
+                            Text(
+                                "index $idx",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
                     }
                 }

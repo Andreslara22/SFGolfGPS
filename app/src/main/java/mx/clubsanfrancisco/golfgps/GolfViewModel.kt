@@ -15,6 +15,7 @@ import com.google.android.gms.wearable.PutDataMapRequest
 import com.google.android.gms.wearable.Wearable
 import org.json.JSONArray
 import org.json.JSONObject
+import kotlin.math.roundToInt
 
 // Data Layer: sincroniza el estado de la ronda con el reloj (snapshot completo,
 // last-write-wins por timestamp): nombres, golpes de todos, jugador activo,
@@ -28,6 +29,7 @@ private const val KEY_UNITS = "units"
 private const val KEY_AUTO = "auto"
 private const val KEY_FLAGS = "flags"
 private const val KEY_CLUBS = "clubs"
+private const val KEY_HCPS = "hcps"
 private const val KEY_TS = "ts"
 private const val SEP = ""
 
@@ -39,11 +41,15 @@ class Player(
     strokes: List<Int> = List(18) { 0 },
     clubs: List<Int> = defaultClubYards,
     putts: List<Int> = List(18) { 0 },
-    fir: List<Int> = List(18) { -1 }
+    fir: List<Int> = List(18) { -1 },
+    hcp: Int = 0
 ) {
     var name by mutableStateOf(name)
     val strokes = mutableStateListOf<Int>().apply { addAll(strokes) }
     val clubYards = mutableStateListOf<Int>().apply { addAll(clubs) }
+
+    /** Handicap de juego (0-40) para Stableford; 0 = scratch. */
+    var hcp by mutableStateOf(hcp)
 
     /** Putts por hoyo (0 = sin registrar). */
     val putts = mutableStateListOf<Int>().apply { addAll(putts) }
@@ -88,6 +94,28 @@ class Player(
         }
         return hit to att
     }
+
+    /** Golpes de ventaja que recibe en un hoyo según su stroke index (reparto clásico). */
+    fun strokesReceived(holeIdx: Int): Int {
+        val si = CourseData.holes[holeIdx].strokeIndex
+        return hcp / 18 + if (hcp % 18 >= si) 1 else 0
+    }
+
+    /**
+     * Puntos Stableford tradicionales con handicap: score neto = golpes −
+     * ventaja del hoyo. Doble bogey neto o peor 0 pts · bogey 1 · par 2 ·
+     * birdie 3 · eagle 4 · albatross 5. Solo hoyos con golpes anotados.
+     */
+    fun stablefordPoints(): Int {
+        var pts = 0
+        strokes.forEachIndexed { i, s ->
+            if (s > 0) {
+                val net = s - strokesReceived(i)
+                pts += (CourseData.holes[i].par + 2 - net).coerceAtLeast(0)
+            }
+        }
+        return pts
+    }
 }
 
 class SavedRound(
@@ -97,7 +125,11 @@ class SavedRound(
     class Entry(
         val name: String, val strokes: Int, val relative: Int, val holes: Int,
         val putts: Int = 0, val gir: Int = 0, val girTracked: Int = 0,
-        val firHit: Int = 0, val firAtt: Int = 0
+        val firHit: Int = 0, val firAtt: Int = 0,
+        /** Golpes hoyo por hoyo (para el promedio por hoyo en Stats). Vacío en rondas viejas. */
+        val holeStrokes: List<Int> = emptyList(),
+        /** Handicap y puntos Stableford con los que se cerró la ronda (0 = sin handicap). */
+        val hcp: Int = 0, val points: Int = 0
     )
 }
 
@@ -194,6 +226,7 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
             dataMap.putBoolean(KEY_AUTO, autoDetect)
             dataMap.putString(KEY_FLAGS, flags.joinToString(","))
             dataMap.putString(KEY_CLUBS, players.joinToString(SEP) { p -> p.clubYards.joinToString(",") })
+            dataMap.putString(KEY_HCPS, players.joinToString(",") { it.hcp.toString() })
             dataMap.putLong(KEY_TS, stateTs)
         }
         dataClient.putDataItem(req.asPutDataRequest().setUrgent())
@@ -223,6 +256,10 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
         autoDetect = dm.getBoolean(KEY_AUTO, autoDetect)
         dm.getString(KEY_FLAGS)?.split(",")?.mapNotNull { it.toIntOrNull() }
             ?.takeIf { it.size == 18 }?.forEachIndexed { i, v -> flags[i] = v }
+        // El reloj no maneja handicaps: solo se aplican si vienen en el snapshot.
+        dm.getString(KEY_HCPS)?.split(",")?.mapNotNull { it.toIntOrNull() }?.let { list ->
+            players.forEachIndexed { i, p -> list.getOrNull(i)?.let { p.hcp = it.coerceIn(0, 40) } }
+        }
         stateTs = ts
         saveState()
     }
@@ -246,7 +283,7 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
     // así restaurar es reescribirlas y recargar el estado.
 
     private val cloudKeys = listOf(
-        "names", "scores", "clubs", "putts", "firs", "flags",
+        "names", "scores", "clubs", "putts", "firs", "flags", "hcps",
         "units", "theme", "history", "greenElev"
     )
 
@@ -351,6 +388,97 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
         if (kotlin.math.abs(delta) < 2.0) return null
         return (dist + delta).coerceAtLeast(0.0)
     }
+
+    // --- Medición de golpes (aprende tus distancias reales por palo) ---
+
+    /** Posición de la bola marcada antes de pegar (null = sin golpe en curso). */
+    var shotLat by mutableStateOf<Double?>(null); private set
+    var shotLng by mutableStateOf<Double?>(null); private set
+    /** Palo con el que se pegó el golpe marcado (-1 = sin golpe en curso). */
+    var shotClubIdx by mutableStateOf(-1); private set
+
+    /** Marca la posición actual como el punto donde se pega el golpe. */
+    fun markShot(clubIdx: Int) {
+        val lat = userLat ?: return
+        val lng = userLng ?: return
+        shotLat = lat; shotLng = lng
+        shotClubIdx = clubIdx.coerceIn(0, clubNames.size - 1)
+    }
+
+    /** Corrige el palo del golpe en curso (por si el sugerido no fue el que usaste). */
+    fun changeShotClub(delta: Int) {
+        if (shotClubIdx >= 0) {
+            shotClubIdx = (shotClubIdx + delta + clubNames.size) % clubNames.size
+        }
+    }
+
+    /** Distancia de la marca del golpe a tu posición actual, en metros. */
+    fun shotDistanceM(): Double? {
+        val sl = shotLat ?: return null
+        val sg = shotLng ?: return null
+        val lat = userLat ?: return null
+        val lng = userLng ?: return null
+        return haversineMeters(sl, sg, lat, lng)
+    }
+
+    fun cancelShot() {
+        shotLat = null; shotLng = null; shotClubIdx = -1
+    }
+
+    /**
+     * Guarda el golpe medido como distancia del palo del jugador activo:
+     * media móvil (70% lo que ya sabía + 30% este golpe) para converger a la
+     * distancia real sin que un golpe atípico la arruine. Devuelve las yardas
+     * medidas, o null si el golpe no es creíble (< 30 yd o > 350 yd).
+     */
+    fun saveShotToClub(): Int? {
+        val m = shotDistanceM() ?: return null
+        val idx = shotClubIdx
+        val p = players.getOrNull(activePlayerIndex) ?: return null
+        if (idx !in clubNames.indices) return null
+        val yd = metersToYards(m).roundToInt()
+        if (yd < 30 || yd > 350) return null
+        p.clubYards[idx] = (p.clubYards[idx] * 0.7 + yd * 0.3).roundToInt().coerceIn(30, 350)
+        cancelShot()
+        syncOut()
+        return yd
+    }
+
+    // --- Handicap index (WHS) ---
+
+    /**
+     * Handicap index estilo WHS de un jugador (por nombre): diferencial de
+     * cada ronda completa (18 hoyos) = (score − rating) × 113 / slope, y se
+     * promedian los mejores según cuántas rondas hay (tabla WHS: de 1 con
+     * ajuste a los mejores 8 de las últimas 20). Null con menos de 3 rondas.
+     */
+    fun handicapIndex(name: String): Double? {
+        val diffs = history.mapNotNull { r ->
+            r.entries.firstOrNull { it.name == name && it.holes == 18 }
+        }.take(20).map {
+            (it.strokes - CourseData.COURSE_RATING) * 113.0 / CourseData.SLOPE_RATING
+        }
+        if (diffs.size < 3) return null
+        val (use, adj) = when (diffs.size) {
+            3 -> 1 to -2.0
+            4 -> 1 to -1.0
+            5 -> 1 to 0.0
+            6 -> 2 to -1.0
+            7, 8 -> 2 to 0.0
+            in 9..11 -> 3 to 0.0
+            in 12..14 -> 4 to 0.0
+            15, 16 -> 5 to 0.0
+            17, 18 -> 6 to 0.0
+            19 -> 7 to 0.0
+            else -> 8 to 0.0
+        }
+        val avg = diffs.sorted().take(use).average() + adj
+        return (avg * 10.0).roundToInt() / 10.0
+    }
+
+    /** Rondas completas (18 hoyos) de un jugador que cuentan para su handicap. */
+    fun handicapRounds(name: String): Int =
+        history.count { r -> r.entries.any { it.name == name && it.holes == 18 } }
 
     /** Borra las elevaciones aprendidas (por si una calibración salió mal). */
     fun resetElevations() {
@@ -550,6 +678,14 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
         }
     }
 
+    /** Ajusta el handicap de juego de un jugador (para Stableford). */
+    fun adjustHandicap(index: Int, delta: Int) {
+        if (index in players.indices) {
+            players[index].hcp = (players[index].hcp + delta).coerceIn(0, 40)
+            syncOut()
+        }
+    }
+
     /** Saves the current round to history (if any strokes) and starts fresh at hole 1. */
     fun finishRound() {
         if (players.any { it.total() > 0 }) {
@@ -559,7 +695,9 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
                     val (fh, fa) = it.firStats()
                     SavedRound.Entry(
                         it.name, it.total(), it.relativeToPar(), it.playedHoles(),
-                        it.totalPutts(), it.girCount(), it.girTracked(), fh, fa
+                        it.totalPutts(), it.girCount(), it.girTracked(), fh, fa,
+                        holeStrokes = it.strokes.toList(),
+                        hcp = it.hcp, points = it.stablefordPoints()
                     )
                 }
             ))
@@ -601,11 +739,14 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
         history.forEach { r ->
             val entries = JSONArray()
             r.entries.forEach { e ->
-                entries.put(JSONObject()
+                val o = JSONObject()
                     .put("n", e.name).put("s", e.strokes)
                     .put("r", e.relative).put("h", e.holes)
                     .put("p", e.putts).put("g", e.gir).put("gt", e.girTracked)
-                    .put("fh", e.firHit).put("fa", e.firAtt))
+                    .put("fh", e.firHit).put("fa", e.firAtt)
+                    .put("hc", e.hcp).put("pt", e.points)
+                if (e.holeStrokes.size == 18) o.put("hs", e.holeStrokes.joinToString(","))
+                entries.put(o)
             }
             historyJson.put(JSONObject().put("d", r.date).put("e", entries))
         }
@@ -615,6 +756,7 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
             .putString("clubs", players.joinToString("|") { p -> p.clubYards.joinToString(",") })
             .putString("putts", players.joinToString("|") { p -> p.putts.joinToString(",") })
             .putString("firs", players.joinToString("|") { p -> p.fir.joinToString(",") })
+            .putString("hcps", players.joinToString(",") { it.hcp.toString() })
             .putString("flags", flags.joinToString(","))
             .putString("units", units.name)
             .putString("theme", themeMode.name)
@@ -643,10 +785,14 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
                 val es = o.getJSONArray("e")
                 val entries = (0 until es.length()).map { j ->
                     val e = es.getJSONObject(j)
+                    val hs = e.optString("hs").split(",")
+                        .mapNotNull { it.toIntOrNull() }
+                        .takeIf { it.size == 18 } ?: emptyList()
                     SavedRound.Entry(
                         e.getString("n"), e.getInt("s"), e.getInt("r"), e.getInt("h"),
                         e.optInt("p"), e.optInt("g"), e.optInt("gt"),
-                        e.optInt("fh"), e.optInt("fa")
+                        e.optInt("fh"), e.optInt("fa"),
+                        holeStrokes = hs, hcp = e.optInt("hc"), points = e.optInt("pt")
                     )
                 }
                 history.add(SavedRound(o.getLong("d"), entries))
@@ -677,5 +823,7 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
                 ?.takeIf { it.size == 18 } ?: List(18) { -1 }
             if (players.size < 5) players.add(Player(name, strokes, clubList, puttList, firList))
         }
+        prefs.getString("hcps", null)?.split(",")?.mapNotNull { it.toIntOrNull() }
+            ?.forEachIndexed { i, v -> players.getOrNull(i)?.hcp = v.coerceIn(0, 40) }
     }
 }

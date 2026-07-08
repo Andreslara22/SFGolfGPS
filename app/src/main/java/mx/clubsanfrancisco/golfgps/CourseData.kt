@@ -17,7 +17,15 @@ data class Hole(
      * de juego. Estimación por par; se puede afinar hoyo por hoyo midiendo
      * en imagen satelital. F/B = centro ∓ depth/2.
      */
-    val greenDepthM: Double = 26.0
+    val greenDepthM: Double = 26.0,
+    /**
+     * Stroke index (índice de handicap del hoyo, 1 = más difícil). Reparte
+     * los golpes de ventaja en juegos con handicap (Stableford). Estimado por
+     * longitud relativa al par (impares en la ida, pares en la vuelta, como
+     * marca la convención); sustitúyelo por el índice oficial de la tarjeta
+     * del club cuando lo tengas a la mano.
+     */
+    val strokeIndex: Int = 18
 ) {
     /** Distancia de referencia tee -> centro del green, en metros. */
     val referenceMeters: Double
@@ -31,27 +39,33 @@ object CourseData {
 
     // greenDepthM: par 3 ≈ 22 m · par 4 ≈ 26 m · par 5 ≈ 30 m (afinable por hoyo).
     val holes: List<Hole> = listOf(
-        Hole(1, 4, 28.6613188, -106.1344914, 28.6637900, -106.1353286, greenDepthM = 26.0),
-        Hole(2, 3, 28.6632884, -106.1362512, 28.6630801, -106.1377442, greenDepthM = 22.0),
-        Hole(3, 4, 28.6631013, -106.1386025, 28.6647702, -106.1359937, greenDepthM = 26.0),
-        Hole(4, 5, 28.6644922, -106.1348907, 28.6624691, -106.1317716, greenDepthM = 30.0),
-        Hole(5, 4, 28.6619495, -106.1317498, 28.6590749, -106.1327969, greenDepthM = 26.0),
-        Hole(6, 4, 28.6594812, -106.1328683, 28.6621990, -106.1323540, greenDepthM = 26.0),
-        Hole(7, 3, 28.6612429, -106.1329173, 28.6598178, -106.1331181, greenDepthM = 22.0),
-        Hole(8, 4, 28.6589552, -106.1333558, 28.6577331, -106.1361134, greenDepthM = 26.0),
-        Hole(9, 5, 28.6570199, -106.1369845, 28.6610908, -106.1362338, greenDepthM = 30.0),
-        Hole(10, 3, 28.6613291, -106.1383977, 28.6615612, -106.1395614, greenDepthM = 22.0),
-        Hole(11, 4, 28.6603576, -106.1403909, 28.6633666, -106.1403051, greenDepthM = 26.0),
-        Hole(12, 5, 28.6642063, -106.1409753, 28.6654939, -106.1445510, greenDepthM = 30.0),
-        Hole(13, 4, 28.6647999, -106.1435958, 28.6632834, -106.1410095, greenDepthM = 26.0),
-        Hole(14, 3, 28.6625444, -106.1411087, 28.6612467, -106.1408100, greenDepthM = 22.0),
-        Hole(15, 4, 28.6598472, -106.1405002, 28.6570123, -106.1401371, greenDepthM = 26.0),
-        Hole(16, 4, 28.6562691, -106.1408539, 28.6539022, -106.1412435, greenDepthM = 26.0),
-        Hole(17, 4, 28.6532590, -106.1406973, 28.6560882, -106.1399239, greenDepthM = 26.0),
-        Hole(18, 5, 28.6573424, -106.1383306, 28.6614197, -106.1376788, greenDepthM = 30.0)
+        Hole(1, 4, 28.6613188, -106.1344914, 28.6637900, -106.1353286, greenDepthM = 26.0, strokeIndex = 15),
+        Hole(2, 3, 28.6632884, -106.1362512, 28.6630801, -106.1377442, greenDepthM = 22.0, strokeIndex = 9),
+        Hole(3, 4, 28.6631013, -106.1386025, 28.6647702, -106.1359937, greenDepthM = 26.0, strokeIndex = 7),
+        Hole(4, 5, 28.6644922, -106.1348907, 28.6624691, -106.1317716, greenDepthM = 30.0, strokeIndex = 17),
+        Hole(5, 4, 28.6619495, -106.1317498, 28.6590749, -106.1327969, greenDepthM = 26.0, strokeIndex = 1),
+        Hole(6, 4, 28.6594812, -106.1328683, 28.6621990, -106.1323540, greenDepthM = 26.0, strokeIndex = 11),
+        Hole(7, 3, 28.6612429, -106.1329173, 28.6598178, -106.1331181, greenDepthM = 22.0, strokeIndex = 5),
+        Hole(8, 4, 28.6589552, -106.1333558, 28.6577331, -106.1361134, greenDepthM = 26.0, strokeIndex = 13),
+        Hole(9, 5, 28.6570199, -106.1369845, 28.6610908, -106.1362338, greenDepthM = 30.0, strokeIndex = 3),
+        Hole(10, 3, 28.6613291, -106.1383977, 28.6615612, -106.1395614, greenDepthM = 22.0, strokeIndex = 14),
+        Hole(11, 4, 28.6603576, -106.1403909, 28.6633666, -106.1403051, greenDepthM = 26.0, strokeIndex = 2),
+        Hole(12, 5, 28.6642063, -106.1409753, 28.6654939, -106.1445510, greenDepthM = 30.0, strokeIndex = 18),
+        Hole(13, 4, 28.6647999, -106.1435958, 28.6632834, -106.1410095, greenDepthM = 26.0, strokeIndex = 12),
+        Hole(14, 3, 28.6625444, -106.1411087, 28.6612467, -106.1408100, greenDepthM = 22.0, strokeIndex = 10),
+        Hole(15, 4, 28.6598472, -106.1405002, 28.6570123, -106.1401371, greenDepthM = 26.0, strokeIndex = 8),
+        Hole(16, 4, 28.6562691, -106.1408539, 28.6539022, -106.1412435, greenDepthM = 26.0, strokeIndex = 16),
+        Hole(17, 4, 28.6532590, -106.1406973, 28.6560882, -106.1399239, greenDepthM = 26.0, strokeIndex = 6),
+        Hole(18, 5, 28.6573424, -106.1383306, 28.6614197, -106.1376788, greenDepthM = 30.0, strokeIndex = 4)
     )
 
     val totalPar: Int = holes.sumOf { it.par } // 72
+
+    // Para el handicap index (WHS): diferencial = (score − rating) × 113 / slope.
+    // Valores estimados para un par 72 de ~5,830 yd; afínalos con la tarjeta
+    // oficial del club si tiene rating/slope certificados.
+    const val COURSE_RATING = 68.5
+    const val SLOPE_RATING = 113
 
     /** Hoyo con el tee más cercano a la posición dada. */
     fun nearestHoleByTee(lat: Double, lng: Double): Hole =
@@ -147,6 +161,15 @@ val clubNames = listOf(
     "7 Iron", "8 Iron", "9 Iron", "PW", "GW", "SW", "LW"
 )
 val defaultClubYards = listOf(230, 215, 200, 190, 185, 175, 165, 155, 145, 135, 120, 105, 90, 75)
+
+/** Índice en clubNames del palo sugerido (preselección al medir golpes). */
+fun clubIndexForDistance(yards: Double, dist: List<Int>): Int {
+    if (dist.size != clubNames.size) return clubNames.size - 1
+    for (i in dist.indices.reversed()) {
+        if (dist[i] >= yards) return i
+    }
+    return 0
+}
 
 /** El palo más corto cuyo alcance cubre la distancia. */
 fun clubForDistance(yards: Double, dist: List<Int>): String {

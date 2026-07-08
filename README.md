@@ -13,10 +13,13 @@ embebidos localmente. Funciona sin internet.
 - **Palo sugerido** según la distancia al green.
 - **Contador de golpes hasta 5 jugadores**, con tarjeta completa: OUT / IN / TOTAL y diferencial vs par (birdies en verde, bogeys en rojo).
 - **Stats de ronda**: putts por hoyo y fairway ✓/✗ (par 4/5) directo en la tarjeta de golpes; GIR se deriva automáticamente (golpes − putts ≤ par − 2). Resumen FIR / GIR / putts por jugador en el Scorecard y en el historial de rondas guardadas.
-- **Juegos**: **Skins** con acarreo de empates para 2-5 jugadores (corona 👑 al líder y pozo acarreado visible) y **Match Play** clásico para 2 jugadores ("2 UP thru 7", "gana 3&2"). Todo calculado en vivo de los golpes ya anotados, sin captura extra.
+- **Juegos**: **Skins** con acarreo de empates para 2-5 jugadores (corona 👑 al líder y pozo acarreado visible), **Match Play** clásico para 2 jugadores ("2 UP thru 7", "gana 3&2") y **Stableford con handicap**: cada jugador configura su handicap (0-40) en Players, el stroke index de cada hoyo reparte los golpes de ventaja y los puntos son los tradicionales (par neto 2 · birdie 3 · bogey 1 · doble bogey neto o peor 0). Todo calculado en vivo de los golpes ya anotados, sin captura extra.
+- **Medir golpe** 📏: marca la bola antes de pegar, camina a donde cayó y guarda — la app aprende tus distancias reales por palo (media móvil 70/30) y el palo sugerido usa TUS números.
+- **Pestaña Stats** 📊: promedio y mejor score, putts por ronda, %GIR, %FIR, tendencia de las últimas 10 rondas y promedio por hoyo con tus 3 hoyos más caros vs par (🔥), por jugador.
+- **Handicap index (WHS)**: diferenciales con rating/slope del campo (`COURSE_RATING`/`SLOPE_RATING` en `CourseData.kt`, afinables) y mejores 8 de las últimas 20 rondas completas (tabla oficial para menos rondas, mínimo 3). Visible en Stats y junto a cada jugador.
 - **Tema oscuro verde** (fairway) + tema claro + modo sistema.
 - **Yardas / metros** configurables.
-- **Wear OS mejorado**: F/C/B alrededor de la distancia grande, contador de putts y resumen de ronda ("TOTAL 42 · +6 · thru 9") directo en el reloj, con scroll para pantallas chicas.
+- **Wear OS mejorado**: F/C/B alrededor de la distancia grande, contador de putts y resumen de ronda ("TOTAL 42 · +6 · thru 9") directo en el reloj, con scroll para pantallas chicas. **Vibra** cuando el GPS detecta que cambiaste de hoyo (AUTO) y trae **complicación de carátula** (hoyo y golpes, un toque abre la app) además del Tile.
 - Pantalla siempre encendida durante la ronda.
 - Golpes y ajustes se guardan aunque cierres la app (SharedPreferences).
 
@@ -61,5 +64,8 @@ ronda y con el botón "Respaldar ahora"; "Restaurar" lo baja en otro teléfono.
 - GPS: `GPS_PROVIDER`, actualización cada 1 s / 1 m.
 - Datos del campo en `CourseData.kt` (18 hoyos, par 72). Si algún día ajustas
   coordenadas de greens/tees, edita solo ese archivo.
+- El **stroke index** de cada hoyo (para Stableford) está estimado por longitud
+  relativa al par; cámbialo en `CourseData.kt` por el índice oficial de la
+  tarjeta del club cuando lo tengas.
 - Umbral del palo sugerido en `recommendedClub()` — ajústalo a tus distancias
   personales si quieres.
