@@ -115,10 +115,22 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
     }
 
     private val permLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
-            granted = ok
-            if (ok) startGps()
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { res ->
+            granted = res[Manifest.permission.ACCESS_FINE_LOCATION] == true
+            if (granted) { startGps(); startRoundService() }
         }
+
+    private fun requiredPermissions(): Array<String> =
+        if (android.os.Build.VERSION.SDK_INT >= 33)
+            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.POST_NOTIFICATIONS)
+        else arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
+
+    /** Servicio de ronda (Ongoing Activity): chip en la carátula para volver. */
+    private fun startRoundService() {
+        ContextCompat.startForegroundService(
+            this, android.content.Intent(this, RoundService::class.java)
+        )
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -153,8 +165,9 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
             == PackageManager.PERMISSION_GRANTED) {
             granted = true
             startGps()
+            startRoundService()
         } else {
-            permLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+            permLauncher.launch(requiredPermissions())
         }
     }
 
@@ -277,6 +290,7 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
         super.onDestroy()
         idleHandler.removeCallbacks(idleRunnable)
         lm.removeUpdates(listener)
+        stopService(android.content.Intent(this, RoundService::class.java))
     }
 
     // ---- Mutaciones locales (guardan y publican) ----
