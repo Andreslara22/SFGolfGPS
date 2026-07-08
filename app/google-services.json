@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1016128951589",
+    "project_id": "sf-golf-5d565",
+    "storage_bucket": "sf-golf-5d565.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1016128951589:android:1ba4823c808a20549e76cc",
+        "android_client_info": {
+          "package_name": "mx.clubsanfrancisco.golfgps"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB5fhYk8iLo-J0VusQMLeqOSeW4ariShk0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
