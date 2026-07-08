@@ -11,8 +11,10 @@ import android.os.Looper
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -40,7 +42,9 @@ import androidx.wear.compose.material.Button
 import androidx.wear.compose.material.ButtonDefaults
 import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.ambient.AmbientLifecycleObserver
+import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
 import androidx.wear.compose.material.Scaffold
+import androidx.wear.compose.material.SwipeToDismissBox
 import androidx.wear.compose.material.Text
 import androidx.wear.compose.material.TimeText
 import com.google.android.gms.wearable.DataClient
@@ -65,16 +69,26 @@ private const val KEY_HOLE = "hole"
 private const val KEY_UNITS = "units"
 private const val KEY_AUTO = "auto"
 private const val KEY_FLAGS = "flags"
+private const val KEY_CLUBS = "clubs"
 private const val KEY_TS = "ts"
 
 // Tras 1 hora sin interacción, la app se cierra y vuelve la carátula normal.
 private const val AUTO_EXIT_MS = 3_600_000L
 private const val SEP = ""
 
-/** Jugador en el reloj: nombre + 18 golpes (espejo de la app de teléfono). */
+/** Jugador en el reloj: nombre + 18 golpes + yardas por palo (espejo del cel). */
 class WPlayer(name0: String) {
     var name by mutableStateOf(name0)
     val strokes = mutableStateListOf<Int>().apply { repeat(18) { add(0) } }
+    val clubs = mutableStateListOf<Int>().apply { addAll(defaultClubYards) }
+}
+
+// Colores por resultado — SOLO se usan en el scorecard.
+private fun scoreColor(diff: Int): Color = when {
+    diff <= -2 -> Color(0xFFF0912B)   // eagle o mejor
+    diff == -1 -> Color(0xFF4DA3FF)   // birdie
+    diff == 0 -> Color(0xFFF3B61F)    // par
+    else -> Color.White               // bogey+
 }
 
 class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
@@ -94,6 +108,7 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
     private val wplayers = mutableStateListOf<WPlayer>()
     private var activePlayer by mutableStateOf(0)
     private val flags = mutableStateListOf<Int>().apply { repeat(18) { add(-1) } }
+    private var showScorecard by mutableStateOf(false)
     private var stateTs = 0L
 
     private val listener = object : LocationListener {
@@ -197,11 +212,14 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
         val prefs = getSharedPreferences("wear", MODE_PRIVATE)
         val names = prefs.getString("names", null)?.split(SEP)?.filter { it.isNotEmpty() }
         val scores = prefs.getString("scores", null)?.split(SEP)
+        val clubs = prefs.getString("clubs", null)?.split(SEP)
         if (names != null && names.isNotEmpty()) {
             names.forEachIndexed { i, nm ->
                 val wp = WPlayer(nm)
                 scores?.getOrNull(i)?.split(",")?.mapNotNull { it.toIntOrNull() }
                     ?.takeIf { it.size == 18 }?.forEachIndexed { h, v -> wp.strokes[h] = v }
+                clubs?.getOrNull(i)?.split(",")?.mapNotNull { it.toIntOrNull() }
+                    ?.takeIf { it.size == clubNames.size }?.forEachIndexed { c, v -> wp.clubs[c] = v }
                 wplayers.add(wp)
             }
         }
@@ -219,6 +237,7 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
         getSharedPreferences("wear", MODE_PRIVATE).edit()
             .putString("names", wplayers.joinToString(SEP) { it.name })
             .putString("scores", wplayers.joinToString(SEP) { p -> p.strokes.joinToString(",") })
+            .putString("clubs", wplayers.joinToString(SEP) { p -> p.clubs.joinToString(",") })
             .putInt("active", activePlayer)
             .putInt("hole", holeIdx)
             .putString("units", if (useMeters) "METERS" else "YARDS")
@@ -226,6 +245,11 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
             .putString("flags", flags.joinToString(","))
             .putLong("stateTs", stateTs)
             .apply()
+        // Refresca el tile de la carátula con el hoyo/golpes actuales.
+        runCatching {
+            androidx.wear.tiles.TileService.getUpdater(this)
+                .requestUpdate(RoundTileService::class.java)
+        }
     }
 
     // ---- Sincronización con el teléfono ----
@@ -238,6 +262,7 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
             dataMap.putString(KEY_UNITS, if (useMeters) "METERS" else "YARDS")
             dataMap.putBoolean(KEY_AUTO, auto)
             dataMap.putString(KEY_FLAGS, flags.joinToString(","))
+            dataMap.putString(KEY_CLUBS, wplayers.joinToString(SEP) { p -> p.clubs.joinToString(",") })
             dataMap.putLong(KEY_TS, stateTs)
         }
         dataClient.putDataItem(req.asPutDataRequest().setUrgent())
@@ -251,10 +276,13 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
         if (names.isEmpty()) return
         while (wplayers.size < names.size) wplayers.add(WPlayer("P${wplayers.size + 1}"))
         while (wplayers.size > names.size) wplayers.removeAt(wplayers.size - 1)
+        val clubsIn = dm.getString(KEY_CLUBS)?.split(SEP)
         names.forEachIndexed { i, nm ->
             wplayers[i].name = nm
             scores.getOrNull(i)?.split(",")?.mapNotNull { it.toIntOrNull() }
                 ?.takeIf { it.size == 18 }?.forEachIndexed { h, v -> wplayers[i].strokes[h] = v }
+            clubsIn?.getOrNull(i)?.split(",")?.mapNotNull { it.toIntOrNull() }
+                ?.takeIf { it.size == clubNames.size }?.forEachIndexed { c, v -> wplayers[i].clubs[c] = v }
         }
         activePlayer = dm.getInt(KEY_ACTIVE, activePlayer).coerceIn(0, wplayers.size - 1)
         holeIdx = dm.getInt(KEY_HOLE, holeIdx).coerceIn(0, 17)
@@ -323,6 +351,10 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
     private fun WatchApp() {
         MaterialTheme {
             Scaffold(timeText = { TimeText() }) {
+                if (showScorecard) {
+                    ScorecardView()
+                    return@Scaffold
+                }
                 val hole = WearCourse.holes[holeIdx]
                 val feat = wearFeatures[hole.number] ?: WFeatures(0f, emptyList())
                 // Ajuste por pin del día (sincronizado desde el cel):
@@ -352,6 +384,14 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                                     else if (total >= 45f) prevHole()
                                 },
                                 onHorizontalDrag = { _, dx -> total += dx }
+                            )
+                        }
+                        .pointerInput(Unit) {
+                            var total = 0f
+                            detectVerticalDragGestures(
+                                onDragStart = { total = 0f },
+                                onDragEnd = { if (total <= -60f) showScorecard = true },
+                                onVerticalDrag = { _, dy -> total += dy }
                             )
                         }
                 ) {
@@ -416,6 +456,15 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                                     front?.toString() ?: "–",
                                     fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White
                                 )
+                                // Palo sugerido (siempre calculado en yardas).
+                                val club = if (distM != null && player != null)
+                                    clubForDistance(yards(distM).toDouble(), player.clubs) else ""
+                                if (club.isNotEmpty()) {
+                                    Text(
+                                        club,
+                                        fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Mint
+                                    )
+                                }
                             }
                             Spacer(Modifier.weight(0.95f))
                         }
@@ -446,6 +495,72 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                                 modifier = Modifier.size(42.dp)
                             ) { Text("+", fontSize = 22.sp) }
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    /** Scorecard de la ronda (abre con swipe arriba; cierra con swipe a la derecha). */
+    @androidx.compose.runtime.Composable
+    private fun ScorecardView() {
+        SwipeToDismissBox(onDismissed = { showScorecard = false }) { isBackground ->
+            if (isBackground) {
+                androidx.compose.foundation.layout.Box(
+                    Modifier.fillMaxSize().background(Color.Black)
+                )
+                return@SwipeToDismissBox
+            }
+            val p = wplayers.getOrNull(activePlayer)
+            ScalingLazyColumn(
+                Modifier.fillMaxSize().background(Color.Black)
+            ) {
+                item {
+                    Text(
+                        "SCORECARD" + if (wplayers.size > 1) " · ▸ ${p?.name ?: ""}" else "",
+                        fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Amber,
+                        modifier = Modifier.clickable { cyclePlayer() }
+                    )
+                }
+                items(18) { i ->
+                    val h = WearCourse.holes[i]
+                    val s = p?.strokes?.getOrNull(i) ?: 0
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 30.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "H${i + 1} · Par ${h.par}",
+                            fontSize = 13.sp,
+                            fontWeight = if (i == holeIdx) FontWeight.Bold else FontWeight.Normal,
+                            color = if (i == holeIdx) Mint else Dim
+                        )
+                        Text(
+                            if (s > 0) "$s" else "–",
+                            fontSize = 15.sp, fontWeight = FontWeight.Bold,
+                            color = if (s > 0) scoreColor(s - h.par) else Dim
+                        )
+                    }
+                }
+                item {
+                    val strokes = p?.strokes ?: emptyList<Int>()
+                    val out = (0 until 9).sumOf { strokes.getOrNull(it) ?: 0 }
+                    val inn = (9 until 18).sumOf { strokes.getOrNull(it) ?: 0 }
+                    var rel = 0
+                    strokes.forEachIndexed { i, s ->
+                        if (s > 0) rel += s - WearCourse.holes[i].par
+                    }
+                    val relTxt = when { rel == 0 -> "E"; rel > 0 -> "+$rel"; else -> "$rel" }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            "OUT $out · IN $inn",
+                            fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Dim
+                        )
+                        Text(
+                            "TOTAL ${out + inn} · $relTxt",
+                            fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Mint
+                        )
                     }
                 }
             }

@@ -27,6 +27,7 @@ private const val KEY_HOLE = "hole"
 private const val KEY_UNITS = "units"
 private const val KEY_AUTO = "auto"
 private const val KEY_FLAGS = "flags"
+private const val KEY_CLUBS = "clubs"
 private const val KEY_TS = "ts"
 private const val SEP = ""
 
@@ -192,6 +193,7 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
             dataMap.putString(KEY_UNITS, units.name)
             dataMap.putBoolean(KEY_AUTO, autoDetect)
             dataMap.putString(KEY_FLAGS, flags.joinToString(","))
+            dataMap.putString(KEY_CLUBS, players.joinToString(SEP) { p -> p.clubYards.joinToString(",") })
             dataMap.putLong(KEY_TS, stateTs)
         }
         dataClient.putDataItem(req.asPutDataRequest().setUrgent())
@@ -203,11 +205,15 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
         if (ts <= stateTs) return
         val names = dm.getString(KEY_NAMES)?.split(SEP) ?: return
         val scores = dm.getString(KEY_SCORES)?.split(SEP) ?: return
-        // Actualiza golpes de los jugadores existentes (preserva putts/fir/clubs).
+        // Actualiza golpes y yardas de palos de los jugadores existentes.
+        val clubsIn = dm.getString(KEY_CLUBS)?.split(SEP)
         players.forEachIndexed { i, p ->
             scores.getOrNull(i)?.split(",")?.mapNotNull { it.toIntOrNull() }
                 ?.takeIf { it.size == 18 }
                 ?.forEachIndexed { h, v -> p.strokes[h] = v }
+            clubsIn?.getOrNull(i)?.split(",")?.mapNotNull { it.toIntOrNull() }
+                ?.takeIf { it.size == clubNames.size }
+                ?.forEachIndexed { c, v -> p.clubYards[c] = v }
         }
         val a = dm.getInt(KEY_ACTIVE, activePlayerIndex)
         if (a in players.indices) activePlayerIndex = a
@@ -485,7 +491,7 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
         if (playerIdx in players.indices && clubIdx in clubNames.indices) {
             val p = players[playerIdx]
             p.clubYards[clubIdx] = (p.clubYards[clubIdx] + delta).coerceIn(30, 350)
-            saveState()
+            syncOut()
         }
     }
 
@@ -493,7 +499,7 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
         if (playerIdx in players.indices) {
             val p = players[playerIdx]
             defaultClubYards.forEachIndexed { i, v -> p.clubYards[i] = v }
-            saveState()
+            syncOut()
         }
     }
 
