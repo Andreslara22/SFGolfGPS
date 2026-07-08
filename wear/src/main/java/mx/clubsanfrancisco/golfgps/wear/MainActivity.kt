@@ -53,6 +53,15 @@ private val Mint = Color(0xFF7ADFA8)
 private val Dim = Color(0xFF9BB8A8)
 private val Amber = Color(0xFFF3B61F)
 
+// Color del golpe según el score (igual que el teléfono):
+// eagle+ naranja · birdie azul · par dorado · bogey+ blanco.
+private fun scoreColor(diff: Int): Color = when {
+    diff <= -2 -> Color(0xFFF0912B)
+    diff == -1 -> Color(0xFF4DA3FF)
+    diff == 0 -> Color(0xFFF3B61F)
+    else -> Color.White
+}
+
 // Data Layer: snapshot completo de la ronda (mismo formato que la app de teléfono).
 private const val STATE_PATH = "/round/state"
 private const val KEY_NAMES = "names"
@@ -60,6 +69,7 @@ private const val KEY_SCORES = "scores"
 private const val KEY_ACTIVE = "active"
 private const val KEY_HOLE = "hole"
 private const val KEY_UNITS = "units"
+private const val KEY_AUTO = "auto"
 private const val KEY_TS = "ts"
 private const val SEP = ""
 
@@ -173,6 +183,7 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
         activePlayer = prefs.getInt("active", 0).coerceIn(0, wplayers.size - 1)
         holeIdx = prefs.getInt("hole", 0).coerceIn(0, 17)
         useMeters = prefs.getString("units", "YARDS") == "METERS"
+        auto = prefs.getBoolean("auto", true)
         stateTs = prefs.getLong("stateTs", 0L)
     }
 
@@ -183,6 +194,7 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
             .putInt("active", activePlayer)
             .putInt("hole", holeIdx)
             .putString("units", if (useMeters) "METERS" else "YARDS")
+            .putBoolean("auto", auto)
             .putLong("stateTs", stateTs)
             .apply()
     }
@@ -195,6 +207,7 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
             dataMap.putInt(KEY_ACTIVE, activePlayer)
             dataMap.putInt(KEY_HOLE, holeIdx)
             dataMap.putString(KEY_UNITS, if (useMeters) "METERS" else "YARDS")
+            dataMap.putBoolean(KEY_AUTO, auto)
             dataMap.putLong(KEY_TS, stateTs)
         }
         dataClient.putDataItem(req.asPutDataRequest().setUrgent())
@@ -216,6 +229,7 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
         activePlayer = dm.getInt(KEY_ACTIVE, activePlayer).coerceIn(0, wplayers.size - 1)
         holeIdx = dm.getInt(KEY_HOLE, holeIdx).coerceIn(0, 17)
         useMeters = dm.getString(KEY_UNITS, if (useMeters) "METERS" else "YARDS") == "METERS"
+        auto = dm.getBoolean(KEY_AUTO, auto)
         stateTs = ts
         persist()
     }
@@ -243,6 +257,7 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
 
     private fun prevHole() { auto = false; holeIdx = (holeIdx + 17) % 18; bumpAndSync() }
     private fun nextHole() { auto = false; holeIdx = (holeIdx + 1) % 18; bumpAndSync() }
+    private fun toggleAuto() { auto = !auto; bumpAndSync() }
 
     private fun cyclePlayer() {
         if (wplayers.size > 1) {
@@ -301,7 +316,7 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.clickable { auto = !auto }
+                                modifier = Modifier.clickable { toggleAuto() }
                             ) {
                                 Text("‹", fontSize = 15.sp, color = Dim)
                                 Spacer(Modifier.width(6.dp))
@@ -335,27 +350,28 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column(
-                                Modifier.weight(1f),
-                                horizontalAlignment = Alignment.CenterHorizontally
+                                Modifier.weight(1.05f).padding(start = 14.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy((-2).dp)
                             ) {
                                 Text(
                                     back?.toString() ?: "–",
-                                    fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White
+                                    fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White
                                 )
                                 Text(
                                     center?.toString() ?: (if (granted) "– –" else "GPS?"),
-                                    fontSize = 46.sp, fontWeight = FontWeight.Black, color = Amber
+                                    fontSize = 42.sp, fontWeight = FontWeight.Black, color = Amber
                                 )
                                 Text(
                                     front?.toString() ?: "–",
-                                    fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White
+                                    fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White
                                 )
                                 Text(
                                     (if (useMeters) "M" else "YD") + " · B/C/F",
                                     fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Dim
                                 )
                             }
-                            Spacer(Modifier.weight(1f))
+                            Spacer(Modifier.weight(0.95f))
                         }
 
                         // ---- Golpes del jugador activo (sincroniza con el cel) ----
@@ -374,7 +390,7 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                                     Modifier.width(40.dp),
                                     fontSize = 26.sp,
                                     fontWeight = FontWeight.Black,
-                                    color = Mint,
+                                    color = if (strokeVal > 0) scoreColor(strokeVal - hole.par) else Mint,
                                     textAlign = TextAlign.Center
                                 )
                                 Text("GOLPES", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = Dim)

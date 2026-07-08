@@ -155,32 +155,13 @@ private fun RangeScreen(vm: GolfViewModel, onRequestPermission: () -> Unit) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Spacer(Modifier.height(6.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "PIN",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.width(8.dp))
-                PinDot(Color(0xFFE85D4A), flag == 0) { vm.setFlagRotation(vm.currentHoleIndex, 0) }
-                Spacer(Modifier.width(8.dp))
-                PinDot(Color(0xFFF4F1E8), flag == 1) { vm.setFlagRotation(vm.currentHoleIndex, 1) }
-                Spacer(Modifier.width(8.dp))
-                PinDot(Color(0xFF5AB0FF), flag == 2) { vm.setFlagRotation(vm.currentHoleIndex, 2) }
-                if (flag >= 0) {
-                    Spacer(Modifier.width(10.dp))
-                    Text(
-                        "✕ clear",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.clickable { vm.clearFlags() }
-                    )
-                }
+            Spacer(Modifier.height(10.dp))
+            FlagChip(flag) {
+                val next = when (flag) { -1 -> 0; 0 -> 1; 1 -> 2; else -> -1 }
+                if (next == -1) vm.clearFlags() else vm.setFlagRotation(vm.currentHoleIndex, next)
             }
 
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(10.dp))
 
             if (!vm.hasLocationPermission) {
                 Spacer(Modifier.height(24.dp))
@@ -434,6 +415,44 @@ private fun StatBadge(label: String, value: String) {
 }
 
 @Composable
+/** Un solo botón de bandera para elegir la posición del pin del día.
+ *  Toca para ciclar: sin pin → frente (rojo) → medio (blanco) → fondo (azul).
+ *  La bandera cambia de color según la posición. */
+@Composable
+private fun FlagChip(flag: Int, onClick: () -> Unit) {
+    val color = when (flag) {
+        0 -> Color(0xFFE85D4A)   // frente
+        1 -> Color(0xFFF4F1E8)   // medio
+        2 -> Color(0xFF5AB0FF)   // fondo
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    val label = when (flag) {
+        0 -> "Pin al frente"; 1 -> "Pin al medio"; 2 -> "Pin al fondo"
+        else -> "Elegir pin"
+    }
+    Surface(
+        shape = RoundedCornerShape(50),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .clickable(onClick = onClick)
+    ) {
+        Row(
+            Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("⚑", fontSize = 20.sp, color = color)
+            Spacer(Modifier.width(8.dp))
+            Text(
+                label,
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
+}
+
 private fun Pill(text: String, bg: Color, fg: Color) {
     Surface(shape = RoundedCornerShape(50), color = bg) {
         Text(
@@ -482,7 +501,9 @@ private fun StrokeRow(
                     modifier = Modifier.width(52.dp),
                     textAlign = TextAlign.Center,
                     fontSize = 26.sp,
-                    fontWeight = FontWeight.Black
+                    fontWeight = FontWeight.Black,
+                    color = if (strokes > 0) scoreColor(strokes - par)
+                            else MaterialTheme.colorScheme.onSurface
                 )
                 Button(
                     onClick = onAdd,
@@ -569,11 +590,17 @@ private fun scoreName(diff: Int): String = when {
     else -> "+$diff"
 }
 
-@Composable
+// Colores por resultado: eagle+ naranja · birdie azul · par dorado · bogey+ blanco.
+private val ScoreEagle = Color(0xFFF0912B)
+private val ScoreBirdie = Color(0xFF4DA3FF)
+private val ScorePar = Color(0xFFF3B61F)
+private val ScoreBogey = Color(0xFFFFFFFF)
+
 private fun scoreColor(diff: Int): Color = when {
-    diff < 0 -> MaterialTheme.colorScheme.primary
-    diff == 0 -> MaterialTheme.colorScheme.onSurfaceVariant
-    else -> MaterialTheme.colorScheme.error
+    diff <= -2 -> ScoreEagle
+    diff == -1 -> ScoreBirdie
+    diff == 0 -> ScorePar
+    else -> ScoreBogey
 }
 
 // ---------------------------------------------------------------- Scorecard

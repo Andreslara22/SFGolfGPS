@@ -25,6 +25,7 @@ private const val KEY_SCORES = "scores"
 private const val KEY_ACTIVE = "active"
 private const val KEY_HOLE = "hole"
 private const val KEY_UNITS = "units"
+private const val KEY_AUTO = "auto"
 private const val KEY_TS = "ts"
 private const val SEP = ""
 
@@ -188,6 +189,7 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
             dataMap.putInt(KEY_ACTIVE, activePlayerIndex)
             dataMap.putInt(KEY_HOLE, currentHoleIndex)
             dataMap.putString(KEY_UNITS, units.name)
+            dataMap.putBoolean(KEY_AUTO, autoDetect)
             dataMap.putLong(KEY_TS, stateTs)
         }
         dataClient.putDataItem(req.asPutDataRequest().setUrgent())
@@ -210,6 +212,7 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
         val h = dm.getInt(KEY_HOLE, currentHoleIndex)
         if (h in 0..17) currentHoleIndex = h
         runCatching { units = Units.valueOf(dm.getString(KEY_UNITS, units.name)) }
+        autoDetect = dm.getBoolean(KEY_AUTO, autoDetect)
         stateTs = ts
         saveState()
     }
@@ -334,12 +337,10 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
             if (lat != null && lng != null) {
                 val nearest = CourseData.nearestHoleByTee(lat, lng)
                 val dist = haversineMeters(lat, lng, nearest.teeLat, nearest.teeLng)
-                if (dist <= AUTO_DETECT_RADIUS_M && currentHoleIndex != nearest.number - 1) {
-                    currentHoleIndex = nearest.number - 1
-                    syncOut()
-                }
+                if (dist <= AUTO_DETECT_RADIUS_M) currentHoleIndex = nearest.number - 1
             }
         }
+        syncOut()
     }
 
     // --- Strokes ---
