@@ -414,7 +414,6 @@ private fun StatBadge(label: String, value: String) {
     }
 }
 
-@Composable
 /** Un solo botón de bandera para elegir la posición del pin del día.
  *  Toca para ciclar: sin pin → frente (rojo) → medio (blanco) → fondo (azul).
  *  La bandera cambia de color según la posición. */
@@ -453,6 +452,7 @@ private fun FlagChip(flag: Int, onClick: () -> Unit) {
     }
 }
 
+@Composable
 private fun Pill(text: String, bg: Color, fg: Color) {
     Surface(shape = RoundedCornerShape(50), color = bg) {
         Text(

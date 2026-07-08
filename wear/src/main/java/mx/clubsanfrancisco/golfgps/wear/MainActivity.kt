@@ -6,7 +6,6 @@ import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Bundle
-import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -40,6 +39,7 @@ import androidx.wear.compose.material.ButtonDefaults
 import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.Scaffold
 import androidx.wear.compose.material.Text
+import androidx.wear.compose.material.TimeText
 import com.google.android.gms.wearable.DataClient
 import com.google.android.gms.wearable.DataEvent
 import com.google.android.gms.wearable.DataEventBuffer
@@ -120,7 +120,8 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        // Sin FLAG_KEEP_SCREEN_ON: la pantalla se apaga con el timeout del
+        // reloj y se prende al levantar la muñeca, volviendo a la app.
         lm = getSystemService(LOCATION_SERVICE) as LocationManager
 
         loadLocal()
@@ -277,7 +278,7 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
     @androidx.compose.runtime.Composable
     private fun WatchApp() {
         MaterialTheme {
-            Scaffold {
+            Scaffold(timeText = { TimeText() }) {
                 val hole = WearCourse.holes[holeIdx]
                 val feat = wearFeatures[hole.number] ?: WFeatures(0f, emptyList())
                 val distM = if (lat != null && lng != null)
@@ -308,7 +309,7 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                     Column(
                         Modifier
                             .fillMaxSize()
-                            .padding(top = 14.dp, bottom = 26.dp),
+                            .padding(top = 24.dp, bottom = 26.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.SpaceBetween
                     ) {
