@@ -26,6 +26,7 @@ private const val KEY_ACTIVE = "active"
 private const val KEY_HOLE = "hole"
 private const val KEY_UNITS = "units"
 private const val KEY_AUTO = "auto"
+private const val KEY_FLAGS = "flags"
 private const val KEY_TS = "ts"
 private const val SEP = ""
 
@@ -190,6 +191,7 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
             dataMap.putInt(KEY_HOLE, currentHoleIndex)
             dataMap.putString(KEY_UNITS, units.name)
             dataMap.putBoolean(KEY_AUTO, autoDetect)
+            dataMap.putString(KEY_FLAGS, flags.joinToString(","))
             dataMap.putLong(KEY_TS, stateTs)
         }
         dataClient.putDataItem(req.asPutDataRequest().setUrgent())
@@ -213,6 +215,8 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
         if (h in 0..17) currentHoleIndex = h
         runCatching { units = Units.valueOf(dm.getString(KEY_UNITS, units.name)) }
         autoDetect = dm.getBoolean(KEY_AUTO, autoDetect)
+        dm.getString(KEY_FLAGS)?.split(",")?.mapNotNull { it.toIntOrNull() }
+            ?.takeIf { it.size == 18 }?.forEachIndexed { i, v -> flags[i] = v }
         stateTs = ts
         saveState()
     }
@@ -469,12 +473,12 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
         for (i in 0 until 18) {
             flags[i] = (((color + (i - holeIdx)) % 3) + 3) % 3
         }
-        saveState()
+        syncOut()
     }
 
     fun clearFlags() {
         for (i in 0 until 18) flags[i] = -1
-        saveState()
+        syncOut()
     }
 
     fun adjustClub(playerIdx: Int, clubIdx: Int, delta: Int) {

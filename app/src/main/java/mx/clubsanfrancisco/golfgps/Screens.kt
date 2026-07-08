@@ -252,11 +252,11 @@ private fun RangeScreen(vm: GolfViewModel, onRequestPermission: () -> Unit) {
                         )
                     }
                 }
-                if (distM != null) {
-                    // Front/back reales usando la profundidad de este green
+                if (distAdjM != null) {
+                    // Front/back usando la distancia ajustada al pin del día
                     val half = hole.greenDepthM / 2.0
-                    val fM = (distM - half).coerceAtLeast(0.0)
-                    val bM = distM + half
+                    val fM = (distAdjM - half).coerceAtLeast(0.0)
+                    val bM = distAdjM + half
                     val fV = if (yards) metersToYards(fM).roundToInt() else fM.roundToInt()
                     val bV = if (yards) metersToYards(bM).roundToInt() else bM.roundToInt()
                     Spacer(Modifier.height(4.dp))

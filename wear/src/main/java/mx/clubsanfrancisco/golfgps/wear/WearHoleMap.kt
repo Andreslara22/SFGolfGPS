@@ -37,7 +37,7 @@ private val LineLt = Color(0xFFE6F2D6)
  * negro del UI (sin línea dura en medio). Pinta fairway, green, bandera, tee,
  * bunkers, agua y el punto GPS del jugador con línea al green.
  */
-fun DrawScope.drawMiniHole(hole: WHole, feat: WFeatures, userLat: Double?, userLng: Double?) {
+fun DrawScope.drawMiniHole(hole: WHole, feat: WFeatures, userLat: Double?, userLng: Double?, flag: Int = -1) {
     val w = size.width
     val h = size.height
 
@@ -175,8 +175,21 @@ fun DrawScope.drawMiniHole(hole: WHole, feat: WFeatures, userLat: Double?, userL
     }
     drawPath(greenBlob(gr * 1.22f), GreenFringe)
     drawPath(greenBlob(gr), GreenTurf)
-    // Punto de pin discreto (sin bandera).
-    drawCircle(Pole, radius = 3f, center = greenP)
+    // Punto de pin discreto (sin bandera), con el color del pin del día.
+    val pinColor = when (flag) {
+        0 -> Color(0xFFE85D4A)   // frente
+        1 -> Color(0xFFFFFFFF)   // medio
+        2 -> Color(0xFF5AB0FF)   // fondo
+        else -> Pole
+    }
+    // Desplaza el punto dentro del green según el pin (frente = abajo).
+    val pinP = when (flag) {
+        0 -> Offset(greenP.x, greenP.y + gr * 0.45f)
+        2 -> Offset(greenP.x, greenP.y - gr * 0.45f)
+        else -> greenP
+    }
+    drawCircle(Color(0x66000000), radius = 4.5f, center = pinP + Offset(1f, 1.5f))
+    drawCircle(pinColor, radius = 3.5f, center = pinP)
 
     // ---- Tee ----
     drawOval(Fairway, topLeft = Offset(teeP.x - 22f, teeP.y - 8f), size = Size(44f, 16f))

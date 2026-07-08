@@ -64,6 +64,7 @@ private const val KEY_ACTIVE = "active"
 private const val KEY_HOLE = "hole"
 private const val KEY_UNITS = "units"
 private const val KEY_AUTO = "auto"
+private const val KEY_FLAGS = "flags"
 private const val KEY_TS = "ts"
 
 // Tras 1 hora sin interacción, la app se cierra y vuelve la carátula normal.
@@ -92,6 +93,7 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
     private var useMeters by mutableStateOf(false)
     private val wplayers = mutableStateListOf<WPlayer>()
     private var activePlayer by mutableStateOf(0)
+    private val flags = mutableStateListOf<Int>().apply { repeat(18) { add(-1) } }
     private var stateTs = 0L
 
     private val listener = object : LocationListener {
@@ -195,6 +197,8 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
         holeIdx = prefs.getInt("hole", 0).coerceIn(0, 17)
         useMeters = prefs.getString("units", "YARDS") == "METERS"
         auto = prefs.getBoolean("auto", true)
+        prefs.getString("flags", null)?.split(",")?.mapNotNull { it.toIntOrNull() }
+            ?.takeIf { it.size == 18 }?.forEachIndexed { i, v -> flags[i] = v }
         stateTs = prefs.getLong("stateTs", 0L)
     }
 
@@ -206,6 +210,7 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
             .putInt("hole", holeIdx)
             .putString("units", if (useMeters) "METERS" else "YARDS")
             .putBoolean("auto", auto)
+            .putString("flags", flags.joinToString(","))
             .putLong("stateTs", stateTs)
             .apply()
     }
@@ -219,6 +224,7 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
             dataMap.putInt(KEY_HOLE, holeIdx)
             dataMap.putString(KEY_UNITS, if (useMeters) "METERS" else "YARDS")
             dataMap.putBoolean(KEY_AUTO, auto)
+            dataMap.putString(KEY_FLAGS, flags.joinToString(","))
             dataMap.putLong(KEY_TS, stateTs)
         }
         dataClient.putDataItem(req.asPutDataRequest().setUrgent())
@@ -241,6 +247,8 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
         holeIdx = dm.getInt(KEY_HOLE, holeIdx).coerceIn(0, 17)
         useMeters = dm.getString(KEY_UNITS, if (useMeters) "METERS" else "YARDS") == "METERS"
         auto = dm.getBoolean(KEY_AUTO, auto)
+        dm.getString(KEY_FLAGS)?.split(",")?.mapNotNull { it.toIntOrNull() }
+            ?.takeIf { it.size == 18 }?.forEachIndexed { i, v -> flags[i] = v }
         stateTs = ts
         persist()
     }
@@ -303,8 +311,13 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
             Scaffold(timeText = { TimeText() }) {
                 val hole = WearCourse.holes[holeIdx]
                 val feat = wearFeatures[hole.number] ?: WFeatures(0f, emptyList())
+                // Ajuste por pin del día (sincronizado desde el cel):
+                // frente ≈ -depth/4 · fondo ≈ +depth/4
+                val flag = flags.getOrNull(holeIdx) ?: -1
+                val pinShift = when (flag) { 0 -> -hole.depthM / 4.0; 2 -> hole.depthM / 4.0; else -> 0.0 }
                 val distM = if (lat != null && lng != null)
-                    meters(lat!!, lng!!, hole.greenLat, hole.greenLng) else null
+                    (meters(lat!!, lng!!, hole.greenLat, hole.greenLng) + pinShift).coerceAtLeast(0.0)
+                    else null
                 val half = hole.depthM / 2.0
                 val center = distM?.let { distVal(it) }
                 val front = distM?.let { distVal((it - half).coerceAtLeast(0.0)) }
@@ -315,7 +328,7 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                 androidx.compose.foundation.layout.Box(
                     Modifier
                         .fillMaxSize()
-                        .drawBehind { drawMiniHole(hole, feat, lat, lng) }
+                        .drawBehind { drawMiniHole(hole, feat, lat, lng, flag) }
                         .pointerInput(Unit) {
                             var total = 0f
                             detectHorizontalDragGestures(
