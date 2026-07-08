@@ -14,6 +14,15 @@ android {
         versionCode = 1
         versionName = "1.0"
     }
+    // Misma llave fija que el módulo app (updates sin desinstalar).
+    signingConfigs {
+        getByName("debug") {
+            storeFile = rootProject.file("signing/sfgolf-debug.keystore")
+            storePassword = "android"
+            keyAlias = "sfgolf"
+            keyPassword = "android"
+        }
+    }
     buildTypes { release { isMinifyEnabled = false } }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

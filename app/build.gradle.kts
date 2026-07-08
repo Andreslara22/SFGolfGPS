@@ -15,6 +15,17 @@ android {
         versionName = "1.0"
     }
 
+    // Llave de firma FIJA (versionada en el repo): permite actualizar la app
+    // sin desinstalar, aunque el APK venga de builds distintos del CI.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = rootProject.file("signing/sfgolf-debug.keystore")
+            storePassword = "android"
+            keyAlias = "sfgolf"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
