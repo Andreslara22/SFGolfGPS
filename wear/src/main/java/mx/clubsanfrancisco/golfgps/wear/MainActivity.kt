@@ -119,7 +119,6 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                 if (meters(l.latitude, l.longitude, n.teeLat, n.teeLng) <= 150.0 &&
                     holeIdx != n.number - 1) {
                     holeIdx = n.number - 1
-                    buzzHoleChange() // avisa en la muñeca sin mirar la pantalla
                     persist() // GPS local; no publica para evitar ping-pong
                 }
             }
@@ -271,14 +270,6 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
             androidx.wear.watchface.complications.datasource.ComplicationDataSourceUpdateRequester
                 .create(this, android.content.ComponentName(this, RoundComplicationService::class.java))
                 .requestUpdateAll()
-        }
-    }
-
-    /** Vibración corta cuando el GPS cambia de hoyo en modo AUTO. */
-    private fun buzzHoleChange() {
-        runCatching {
-            val v = getSystemService(VIBRATOR_SERVICE) as android.os.Vibrator
-            v.vibrate(android.os.VibrationEffect.createWaveform(longArrayOf(0, 60, 80, 60), -1))
         }
     }
 

@@ -19,7 +19,7 @@ embebidos localmente. Funciona sin internet.
 - **Handicap index (WHS)**: diferenciales con rating/slope del campo (`COURSE_RATING`/`SLOPE_RATING` en `CourseData.kt`, afinables) y mejores 8 de las últimas 20 rondas completas (tabla oficial para menos rondas, mínimo 3). Visible en Stats y junto a cada jugador.
 - **Tema oscuro verde** (fairway) + tema claro + modo sistema.
 - **Yardas / metros** configurables.
-- **Wear OS mejorado**: F/C/B alrededor de la distancia grande, contador de putts y resumen de ronda ("TOTAL 42 · +6 · thru 9") directo en el reloj, con scroll para pantallas chicas. **Vibra** cuando el GPS detecta que cambiaste de hoyo (AUTO) y trae **complicación de carátula** (hoyo y golpes, un toque abre la app) además del Tile.
+- **Wear OS mejorado**: F/C/B alrededor de la distancia grande, contador de putts y resumen de ronda ("TOTAL 42 · +6 · thru 9") directo en el reloj, con scroll para pantallas chicas. Trae **complicación de carátula** (hoyo y golpes, un toque abre la app) además del Tile.
 - Pantalla siempre encendida durante la ronda.
 - Golpes y ajustes se guardan aunque cierres la app (SharedPreferences).
 
