@@ -27,7 +27,6 @@ private val Sand = Color(0xFFEAD9A6)
 private val SandShadow = Color(0xFFCBB77E)
 private val WaterDeep = Color(0xFF3C79AE)
 private val WaterBlue = Color(0xFF4F92C9)
-private val FlagRed = Color(0xFFE0584A)
 private val Pole = Color(0xFFFFFFFF)
 private val PlayerBlue = Color(0xFF3D8BFF)
 private val LineLt = Color(0xFFE6F2D6)
@@ -176,15 +175,7 @@ fun DrawScope.drawMiniHole(hole: WHole, feat: WFeatures, userLat: Double?, userL
     }
     drawPath(greenBlob(gr * 1.22f), GreenFringe)
     drawPath(greenBlob(gr), GreenTurf)
-    val poleTop = Offset(greenP.x, greenP.y - gr * 1.55f)
-    drawLine(Pole, greenP, poleTop, strokeWidth = 3f, cap = StrokeCap.Round)
-    val flagPath = Path().apply {
-        moveTo(poleTop.x, poleTop.y)
-        lineTo(poleTop.x + gr * 0.72f, poleTop.y + gr * 0.26f)
-        lineTo(poleTop.x, poleTop.y + gr * 0.52f)
-        close()
-    }
-    drawPath(flagPath, FlagRed)
+    // Punto de pin discreto (sin bandera).
     drawCircle(Pole, radius = 3f, center = greenP)
 
     // ---- Tee ----

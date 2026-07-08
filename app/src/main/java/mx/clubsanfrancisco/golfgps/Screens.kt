@@ -142,8 +142,8 @@ private fun RangeScreen(vm: GolfViewModel, onRequestPermission: () -> Unit) {
                     color = MaterialTheme.colorScheme.primary
                 )
                 Spacer(Modifier.width(10.dp))
-                Pill("PAR ${hole.par}", MaterialTheme.colorScheme.primaryContainer,
-                    MaterialTheme.colorScheme.onPrimaryContainer)
+                Pill("PAR ${hole.par}", MaterialTheme.colorScheme.primary,
+                    MaterialTheme.colorScheme.onPrimary)
                 if (vm.autoDetect) {
                     Spacer(Modifier.width(6.dp))
                     Pill("AUTO", MaterialTheme.colorScheme.secondaryContainer,
@@ -310,7 +310,7 @@ private fun RangeScreen(vm: GolfViewModel, onRequestPermission: () -> Unit) {
                         ) {
                             vm.players.forEachIndexed { i, p ->
                                 MiniChip(p.name.take(8), i == vm.activePlayerIndex) {
-                                    vm.activePlayerIndex = i
+                                    vm.setActivePlayer(i)
                                 }
                             }
                         }
@@ -438,9 +438,9 @@ private fun Pill(text: String, bg: Color, fg: Color) {
     Surface(shape = RoundedCornerShape(50), color = bg) {
         Text(
             text,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-            fontWeight = FontWeight.Bold,
-            fontSize = 13.sp,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+            fontWeight = FontWeight.Black,
+            fontSize = 16.sp,
             color = fg
         )
     }
@@ -1135,7 +1135,7 @@ private fun SettingsScreen(vm: GolfViewModel) {
             ) {
                 vm.players.forEachIndexed { i, p ->
                     MiniChip(p.name.take(8), i == vm.activePlayerIndex) {
-                        vm.activePlayerIndex = i
+                        vm.setActivePlayer(i)
                     }
                 }
             }

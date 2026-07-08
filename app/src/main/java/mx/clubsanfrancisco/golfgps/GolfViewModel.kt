@@ -16,10 +16,17 @@ import com.google.android.gms.wearable.Wearable
 import org.json.JSONArray
 import org.json.JSONObject
 
-// Data Layer: sincroniza los golpes del jugador principal con el reloj.
-private const val STROKES_PATH = "/round/strokes"
-private const val KEY_CSV = "csv"
+// Data Layer: sincroniza el estado de la ronda con el reloj (snapshot completo,
+// last-write-wins por timestamp): nombres, golpes de todos, jugador activo,
+// hoyo actual y unidades.
+private const val STATE_PATH = "/round/state"
+private const val KEY_NAMES = "names"
+private const val KEY_SCORES = "scores"
+private const val KEY_ACTIVE = "active"
+private const val KEY_HOLE = "hole"
+private const val KEY_UNITS = "units"
 private const val KEY_TS = "ts"
+private const val SEP = ""
 
 enum class Units { YARDS, METERS }
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
@@ -107,7 +114,7 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
 
     private val prefs = app.getSharedPreferences("sfgolf", Context.MODE_PRIVATE)
     private val dataClient: DataClient = Wearable.getDataClient(app)
-    private var strokesTs = 0L
+    private var stateTs = 0L
 
     // --- GPS ---
     var userLat by mutableStateOf<Double?>(null); private set
@@ -150,50 +157,68 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
     init {
         loadState()
         if (players.isEmpty()) players.add(Player("Player 1"))
-        strokesTs = prefs.getLong("strokesTs", 0L)
+        stateTs = prefs.getLong("stateTs", 0L)
 
-        // Sincronización con el reloj (Data Layer).
+        // Sincronización con el reloj (Data Layer): trae el último snapshot.
         dataClient.addListener(this)
         dataClient.dataItems.addOnSuccessListener { items ->
             for (item in items) {
-                if (item.uri.path == STROKES_PATH) {
-                    val dm = DataMapItem.fromDataItem(item).dataMap
-                    applyIncoming(dm.getString(KEY_CSV), dm.getLong(KEY_TS))
+                if (item.uri.path == STATE_PATH) {
+                    applyIncoming(DataMapItem.fromDataItem(item).dataMap)
                 }
             }
             items.release()
         }
     }
 
-    // --- Sincronización de golpes con el reloj (jugador principal = players[0]) ---
+    // --- Sincronización con el reloj (snapshot completo de la ronda) ---
 
-    /** Publica los 18 golpes del jugador principal para que el reloj los reciba. */
-    private fun pushStrokes() {
-        val p = players.getOrNull(0) ?: return
-        val req = PutDataMapRequest.create(STROKES_PATH).apply {
-            dataMap.putString(KEY_CSV, p.strokes.joinToString(","))
-            dataMap.putLong(KEY_TS, strokesTs)
+    /** Marca cambio local, guarda y publica el estado al reloj. */
+    private fun syncOut() {
+        stateTs = System.currentTimeMillis()
+        saveState()
+        pushState()
+    }
+
+    /** Publica el estado actual (nombres, golpes, activo, hoyo, unidades). */
+    private fun pushState() {
+        val req = PutDataMapRequest.create(STATE_PATH).apply {
+            dataMap.putString(KEY_NAMES, players.joinToString(SEP) { it.name })
+            dataMap.putString(KEY_SCORES, players.joinToString(SEP) { p -> p.strokes.joinToString(",") })
+            dataMap.putInt(KEY_ACTIVE, activePlayerIndex)
+            dataMap.putInt(KEY_HOLE, currentHoleIndex)
+            dataMap.putString(KEY_UNITS, units.name)
+            dataMap.putLong(KEY_TS, stateTs)
         }
         dataClient.putDataItem(req.asPutDataRequest().setUrgent())
     }
 
-    /** Aplica un score entrante del reloj si es más nuevo (last-write-wins). */
-    private fun applyIncoming(csv: String?, ts: Long) {
-        if (csv == null || ts <= strokesTs) return
-        val arr = csv.split(",").mapNotNull { it.toIntOrNull() }
-        if (arr.size != 18) return
-        val p = players.getOrNull(0) ?: return
-        arr.forEachIndexed { i, v -> p.strokes[i] = v }
-        strokesTs = ts
+    /** Aplica un snapshot entrante si es más nuevo (last-write-wins). */
+    private fun applyIncoming(dm: com.google.android.gms.wearable.DataMap) {
+        val ts = dm.getLong(KEY_TS)
+        if (ts <= stateTs) return
+        val names = dm.getString(KEY_NAMES)?.split(SEP) ?: return
+        val scores = dm.getString(KEY_SCORES)?.split(SEP) ?: return
+        // Actualiza golpes de los jugadores existentes (preserva putts/fir/clubs).
+        players.forEachIndexed { i, p ->
+            scores.getOrNull(i)?.split(",")?.mapNotNull { it.toIntOrNull() }
+                ?.takeIf { it.size == 18 }
+                ?.forEachIndexed { h, v -> p.strokes[h] = v }
+        }
+        val a = dm.getInt(KEY_ACTIVE, activePlayerIndex)
+        if (a in players.indices) activePlayerIndex = a
+        val h = dm.getInt(KEY_HOLE, currentHoleIndex)
+        if (h in 0..17) currentHoleIndex = h
+        runCatching { units = Units.valueOf(dm.getString(KEY_UNITS, units.name)) }
+        stateTs = ts
         saveState()
     }
 
     override fun onDataChanged(events: DataEventBuffer) {
         for (event in events) {
             if (event.type == DataEvent.TYPE_CHANGED &&
-                event.dataItem.uri.path == STROKES_PATH) {
-                val dm = DataMapItem.fromDataItem(event.dataItem).dataMap
-                applyIncoming(dm.getString(KEY_CSV), dm.getLong(KEY_TS))
+                event.dataItem.uri.path == STATE_PATH) {
+                applyIncoming(DataMapItem.fromDataItem(event.dataItem).dataMap)
             }
         }
     }
@@ -222,8 +247,9 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
             val dist = haversineMeters(lat, lng, nearest.teeLat, nearest.teeLng)
             // Only switch when actually standing near a tee — prevents jumping
             // around when you're away from the course.
-            if (dist <= AUTO_DETECT_RADIUS_M) {
+            if (dist <= AUTO_DETECT_RADIUS_M && currentHoleIndex != nearest.number - 1) {
                 currentHoleIndex = nearest.number - 1
+                syncOut()
             }
         }
     }
@@ -291,11 +317,13 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
     fun nextHole() {
         autoDetect = false
         currentHoleIndex = (currentHoleIndex + 1) % 18
+        syncOut()
     }
 
     fun previousHole() {
         autoDetect = false
         currentHoleIndex = (currentHoleIndex + 17) % 18
+        syncOut()
     }
 
     fun toggleAutoDetect() {
@@ -306,7 +334,10 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
             if (lat != null && lng != null) {
                 val nearest = CourseData.nearestHoleByTee(lat, lng)
                 val dist = haversineMeters(lat, lng, nearest.teeLat, nearest.teeLng)
-                if (dist <= AUTO_DETECT_RADIUS_M) currentHoleIndex = nearest.number - 1
+                if (dist <= AUTO_DETECT_RADIUS_M && currentHoleIndex != nearest.number - 1) {
+                    currentHoleIndex = nearest.number - 1
+                    syncOut()
+                }
             }
         }
     }
@@ -316,9 +347,7 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
         if (playerIdx in players.indices) {
             val p = players[playerIdx]
             if (p.strokes[holeIdx] < 15) p.strokes[holeIdx] = p.strokes[holeIdx] + 1
-            if (playerIdx == 0) strokesTs = System.currentTimeMillis()
-            saveState()
-            if (playerIdx == 0) pushStrokes()
+            syncOut()
         }
     }
 
@@ -326,9 +355,15 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
         if (playerIdx in players.indices) {
             val p = players[playerIdx]
             if (p.strokes[holeIdx] > 0) p.strokes[holeIdx] = p.strokes[holeIdx] - 1
-            if (playerIdx == 0) strokesTs = System.currentTimeMillis()
-            saveState()
-            if (playerIdx == 0) pushStrokes()
+            syncOut()
+        }
+    }
+
+    /** Cambia el jugador activo y sincroniza (para el selector del reloj). */
+    fun setActivePlayer(index: Int) {
+        if (index in players.indices && index != activePlayerIndex) {
+            activePlayerIndex = index
+            syncOut()
         }
     }
 
@@ -417,7 +452,7 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
     fun addPlayer() {
         if (players.size < 5) {
             players.add(Player("Player ${players.size + 1}"))
-            saveState()
+            syncOut()
         }
     }
 
@@ -425,7 +460,7 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
         if (players.size > 1 && index in players.indices) {
             players.removeAt(index)
             if (activePlayerIndex >= players.size) activePlayerIndex = players.size - 1
-            saveState()
+            syncOut()
         }
     }
 
@@ -460,7 +495,7 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
     fun renamePlayer(index: Int, newName: String) {
         if (index in players.indices && newName.isNotBlank()) {
             players[index].name = newName.trim().take(14)
-            saveState()
+            syncOut()
         }
     }
 
@@ -485,9 +520,7 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
         for (i in 0 until 18) flags[i] = -1
         currentHoleIndex = 0
         autoDetect = false
-        strokesTs = System.currentTimeMillis()
-        saveState()
-        pushStrokes()
+        syncOut()
     }
 
     /** Clears current strokes without saving to history. */
@@ -497,9 +530,7 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
         }
         for (i in 0 until 18) flags[i] = -1
         currentHoleIndex = 0
-        strokesTs = System.currentTimeMillis()
-        saveState()
-        pushStrokes()
+        syncOut()
     }
 
     fun deleteRound(index: Int) {
@@ -509,7 +540,7 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
         }
     }
 
-    fun setUnitsAndSave(u: Units) { units = u; saveState() }
+    fun setUnitsAndSave(u: Units) { units = u; syncOut() }
     fun setThemeAndSave(t: ThemeMode) { themeMode = t; saveState() }
 
     // --- Persistence ---
@@ -536,7 +567,7 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
             .putString("units", units.name)
             .putString("theme", themeMode.name)
             .putString("history", historyJson.toString())
-            .putLong("strokesTs", strokesTs)
+            .putLong("stateTs", stateTs)
             .apply()
     }
 

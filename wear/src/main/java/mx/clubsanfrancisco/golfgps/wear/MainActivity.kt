@@ -43,18 +43,31 @@ import androidx.wear.compose.material.Text
 import com.google.android.gms.wearable.DataClient
 import com.google.android.gms.wearable.DataEvent
 import com.google.android.gms.wearable.DataEventBuffer
+import com.google.android.gms.wearable.DataMap
 import com.google.android.gms.wearable.DataMapItem
 import com.google.android.gms.wearable.PutDataMapRequest
 import com.google.android.gms.wearable.Wearable
+import kotlin.math.roundToInt
 
 private val Mint = Color(0xFF7ADFA8)
 private val Dim = Color(0xFF9BB8A8)
 private val Amber = Color(0xFFF3B61F)
 
-// Data Layer: ruta y llaves compartidas con la app de teléfono.
-private const val STROKES_PATH = "/round/strokes"
-private const val KEY_CSV = "csv"
+// Data Layer: snapshot completo de la ronda (mismo formato que la app de teléfono).
+private const val STATE_PATH = "/round/state"
+private const val KEY_NAMES = "names"
+private const val KEY_SCORES = "scores"
+private const val KEY_ACTIVE = "active"
+private const val KEY_HOLE = "hole"
+private const val KEY_UNITS = "units"
 private const val KEY_TS = "ts"
+private const val SEP = ""
+
+/** Jugador en el reloj: nombre + 18 golpes (espejo de la app de teléfono). */
+class WPlayer(name0: String) {
+    var name by mutableStateOf(name0)
+    val strokes = mutableStateListOf<Int>().apply { repeat(18) { add(0) } }
+}
 
 class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
 
@@ -66,16 +79,20 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
     private var granted by mutableStateOf(false)
     private var holeIdx by mutableStateOf(0)
     private var auto by mutableStateOf(true)
-    private val strokes = mutableStateListOf<Int>().apply { repeat(18) { add(0) } }
-    private var strokesTs = 0L
+    private var useMeters by mutableStateOf(false)
+    private val wplayers = mutableStateListOf<WPlayer>()
+    private var activePlayer by mutableStateOf(0)
+    private var stateTs = 0L
 
     private val listener = object : LocationListener {
         override fun onLocationChanged(l: Location) {
             lat = l.latitude; lng = l.longitude
             if (auto) {
                 val n = WearCourse.nearestByTee(l.latitude, l.longitude)
-                if (meters(l.latitude, l.longitude, n.teeLat, n.teeLng) <= 150.0) {
+                if (meters(l.latitude, l.longitude, n.teeLat, n.teeLng) <= 150.0 &&
+                    holeIdx != n.number - 1) {
                     holeIdx = n.number - 1
+                    persist() // GPS local; no publica para evitar ping-pong
                 }
             }
         }
@@ -96,19 +113,14 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         lm = getSystemService(LOCATION_SERVICE) as LocationManager
 
-        val prefs = getSharedPreferences("wear", MODE_PRIVATE)
-        prefs.getString("strokes", null)?.split(",")?.mapNotNull { it.toIntOrNull() }
-            ?.takeIf { it.size == 18 }?.forEachIndexed { i, v -> strokes[i] = v }
-        strokesTs = prefs.getLong("strokesTs", 0L)
-
+        loadLocal()
         setContent { WatchApp() }
 
-        // Trae el último score publicado por el teléfono (si es más nuevo).
+        // Trae el último snapshot publicado por el teléfono.
         dataClient.dataItems.addOnSuccessListener { items ->
             for (item in items) {
-                if (item.uri.path == STROKES_PATH) {
-                    val dm = DataMapItem.fromDataItem(item).dataMap
-                    applyIncoming(dm.getString(KEY_CSV), dm.getLong(KEY_TS))
+                if (item.uri.path == STATE_PATH) {
+                    applyIncoming(DataMapItem.fromDataItem(item).dataMap)
                 }
             }
             items.release()
@@ -144,49 +156,75 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
         } catch (_: SecurityException) {}
     }
 
+    // ---- Persistencia local ----
+    private fun loadLocal() {
+        val prefs = getSharedPreferences("wear", MODE_PRIVATE)
+        val names = prefs.getString("names", null)?.split(SEP)?.filter { it.isNotEmpty() }
+        val scores = prefs.getString("scores", null)?.split(SEP)
+        if (names != null && names.isNotEmpty()) {
+            names.forEachIndexed { i, nm ->
+                val wp = WPlayer(nm)
+                scores?.getOrNull(i)?.split(",")?.mapNotNull { it.toIntOrNull() }
+                    ?.takeIf { it.size == 18 }?.forEachIndexed { h, v -> wp.strokes[h] = v }
+                wplayers.add(wp)
+            }
+        }
+        if (wplayers.isEmpty()) wplayers.add(WPlayer("P1"))
+        activePlayer = prefs.getInt("active", 0).coerceIn(0, wplayers.size - 1)
+        holeIdx = prefs.getInt("hole", 0).coerceIn(0, 17)
+        useMeters = prefs.getString("units", "YARDS") == "METERS"
+        stateTs = prefs.getLong("stateTs", 0L)
+    }
+
     private fun persist() {
         getSharedPreferences("wear", MODE_PRIVATE).edit()
-            .putString("strokes", strokes.joinToString(","))
-            .putLong("strokesTs", strokesTs)
+            .putString("names", wplayers.joinToString(SEP) { it.name })
+            .putString("scores", wplayers.joinToString(SEP) { p -> p.strokes.joinToString(",") })
+            .putInt("active", activePlayer)
+            .putInt("hole", holeIdx)
+            .putString("units", if (useMeters) "METERS" else "YARDS")
+            .putLong("stateTs", stateTs)
             .apply()
     }
 
-    /** Cambia los golpes del hoyo actual, guarda y publica al teléfono. */
-    private fun changeStroke(delta: Int) {
-        val v = strokes[holeIdx] + delta
-        if (v in 0..15) {
-            strokes[holeIdx] = v
-            strokesTs = System.currentTimeMillis()
-            persist()
-            pushStrokes()
-        }
-    }
-
-    /** Publica los 18 golpes en la Data Layer para que el teléfono los reciba. */
-    private fun pushStrokes() {
-        val req = PutDataMapRequest.create(STROKES_PATH).apply {
-            dataMap.putString(KEY_CSV, strokes.joinToString(","))
-            dataMap.putLong(KEY_TS, strokesTs)
+    // ---- Sincronización con el teléfono ----
+    private fun pushState() {
+        val req = PutDataMapRequest.create(STATE_PATH).apply {
+            dataMap.putString(KEY_NAMES, wplayers.joinToString(SEP) { it.name })
+            dataMap.putString(KEY_SCORES, wplayers.joinToString(SEP) { p -> p.strokes.joinToString(",") })
+            dataMap.putInt(KEY_ACTIVE, activePlayer)
+            dataMap.putInt(KEY_HOLE, holeIdx)
+            dataMap.putString(KEY_UNITS, if (useMeters) "METERS" else "YARDS")
+            dataMap.putLong(KEY_TS, stateTs)
         }
         dataClient.putDataItem(req.asPutDataRequest().setUrgent())
     }
 
-    /** Aplica un score entrante si es más nuevo que el local (last-write-wins). */
-    private fun applyIncoming(csv: String?, ts: Long) {
-        if (csv == null || ts <= strokesTs) return
-        val arr = csv.split(",").mapNotNull { it.toIntOrNull() }
-        if (arr.size != 18) return
-        arr.forEachIndexed { i, v -> strokes[i] = v }
-        strokesTs = ts
+    private fun applyIncoming(dm: DataMap) {
+        val ts = dm.getLong(KEY_TS)
+        if (ts <= stateTs) return
+        val names = dm.getString(KEY_NAMES)?.split(SEP)?.filter { it.isNotEmpty() } ?: return
+        val scores = dm.getString(KEY_SCORES)?.split(SEP) ?: return
+        if (names.isEmpty()) return
+        while (wplayers.size < names.size) wplayers.add(WPlayer("P${wplayers.size + 1}"))
+        while (wplayers.size > names.size) wplayers.removeAt(wplayers.size - 1)
+        names.forEachIndexed { i, nm ->
+            wplayers[i].name = nm
+            scores.getOrNull(i)?.split(",")?.mapNotNull { it.toIntOrNull() }
+                ?.takeIf { it.size == 18 }?.forEachIndexed { h, v -> wplayers[i].strokes[h] = v }
+        }
+        activePlayer = dm.getInt(KEY_ACTIVE, activePlayer).coerceIn(0, wplayers.size - 1)
+        holeIdx = dm.getInt(KEY_HOLE, holeIdx).coerceIn(0, 17)
+        useMeters = dm.getString(KEY_UNITS, if (useMeters) "METERS" else "YARDS") == "METERS"
+        stateTs = ts
         persist()
     }
 
     override fun onDataChanged(events: DataEventBuffer) {
         for (event in events) {
             if (event.type == DataEvent.TYPE_CHANGED &&
-                event.dataItem.uri.path == STROKES_PATH) {
-                val dm = DataMapItem.fromDataItem(event.dataItem).dataMap
-                applyIncoming(dm.getString(KEY_CSV), dm.getLong(KEY_TS))
+                event.dataItem.uri.path == STATE_PATH) {
+                applyIncoming(DataMapItem.fromDataItem(event.dataItem).dataMap)
             }
         }
     }
@@ -196,8 +234,30 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
         lm.removeUpdates(listener)
     }
 
-    private fun prevHole() { auto = false; holeIdx = (holeIdx + 17) % 18 }
-    private fun nextHole() { auto = false; holeIdx = (holeIdx + 1) % 18 }
+    // ---- Mutaciones locales (guardan y publican) ----
+    private fun bumpAndSync() {
+        stateTs = System.currentTimeMillis()
+        persist()
+        pushState()
+    }
+
+    private fun prevHole() { auto = false; holeIdx = (holeIdx + 17) % 18; bumpAndSync() }
+    private fun nextHole() { auto = false; holeIdx = (holeIdx + 1) % 18; bumpAndSync() }
+
+    private fun cyclePlayer() {
+        if (wplayers.size > 1) {
+            activePlayer = (activePlayer + 1) % wplayers.size
+            bumpAndSync()
+        }
+    }
+
+    private fun changeStroke(delta: Int) {
+        val p = wplayers.getOrNull(activePlayer) ?: return
+        val v = p.strokes[holeIdx] + delta
+        if (v in 0..15) { p.strokes[holeIdx] = v; bumpAndSync() }
+    }
+
+    private fun distVal(m: Double): Int = if (useMeters) m.roundToInt() else yards(m)
 
     @androidx.compose.runtime.Composable
     private fun WatchApp() {
@@ -208,9 +268,11 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                 val distM = if (lat != null && lng != null)
                     meters(lat!!, lng!!, hole.greenLat, hole.greenLng) else null
                 val half = hole.depthM / 2.0
-                val center = distM?.let { yards(it) }
-                val front = distM?.let { yards((it - half).coerceAtLeast(0.0)) }
-                val back = distM?.let { yards(it + half) }
+                val center = distM?.let { distVal(it) }
+                val front = distM?.let { distVal((it - half).coerceAtLeast(0.0)) }
+                val back = distM?.let { distVal(it + half) }
+                val player = wplayers.getOrNull(activePlayer)
+                val strokeVal = player?.strokes?.getOrNull(holeIdx) ?: 0
 
                 androidx.compose.foundation.layout.Box(
                     Modifier
@@ -231,16 +293,16 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                     Column(
                         Modifier
                             .fillMaxSize()
-                            .padding(top = 16.dp, bottom = 26.dp),
+                            .padding(top = 14.dp, bottom = 26.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.SpaceBetween
                     ) {
-                        // ---- Encabezado: hoyo + par (toca para on/off GPS auto) ----
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.clickable { auto = !auto }
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                        // ---- Encabezado: hoyo + par + jugador activo ----
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.clickable { auto = !auto }
+                            ) {
                                 Text("‹", fontSize = 15.sp, color = Dim)
                                 Spacer(Modifier.width(6.dp))
                                 Text(
@@ -254,17 +316,22 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                             }
                             Text(
                                 "PAR ${hole.par}" + if (auto) " · GPS" else "",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Dim
+                                fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Dim
                             )
+                            if (wplayers.size > 1 && player != null) {
+                                Text(
+                                    "▸ ${player.name}",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Amber,
+                                    modifier = Modifier.clickable { cyclePlayer() }
+                                )
+                            }
                         }
 
-                        // ---- Distancias (izquierda) · mapa se ve a la derecha ----
+                        // ---- Distancias (izquierda) · mapa a la derecha ----
                         Row(
-                            Modifier
-                                .weight(1f)
-                                .fillMaxWidth(),
+                            Modifier.weight(1f).fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column(
@@ -284,14 +351,14 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                                     fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White
                                 )
                                 Text(
-                                    "YD · B/C/F",
+                                    (if (useMeters) "M" else "YD") + " · B/C/F",
                                     fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Dim
                                 )
                             }
                             Spacer(Modifier.weight(1f))
                         }
 
-                        // ---- Golpes (grande y fácil de picar, sincroniza con el cel) ----
+                        // ---- Golpes del jugador activo (sincroniza con el cel) ----
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -303,7 +370,7 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                             ) { Text("−", fontSize = 22.sp) }
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(
-                                    "${strokes[holeIdx]}",
+                                    "$strokeVal",
                                     Modifier.width(40.dp),
                                     fontSize = 26.sp,
                                     fontWeight = FontWeight.Black,
