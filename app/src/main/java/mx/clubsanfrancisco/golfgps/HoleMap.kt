@@ -83,7 +83,7 @@ private val holeArt: Map<Int, HoleArt> = mapOf(
 )
 
 @Composable
-fun HoleMapCard(hole: Hole, userLat: Double?, userLng: Double?, units: Units) {
+fun HoleMapCard(hole: Hole, userLat: Double?, userLng: Double?, units: Units, flag: Int = -1) {
     val density = LocalDensity.current
     val labelPx = with(density) { 13.dp.toPx() }
 
@@ -144,7 +144,7 @@ fun HoleMapCard(hole: Hole, userLat: Double?, userLng: Double?, units: Units) {
                     }
                 }
         ) {
-            drawHoleMap(hole, userLat, userLng, units, labelPx, tapPoint)
+            drawHoleMap(hole, userLat, userLng, units, labelPx, tapPoint, flag)
         }
     }
 }
@@ -282,8 +282,15 @@ private fun DrawScope.drawHoleMap(
     userLng: Double?,
     units: Units,
     labelPx: Float,
-    tapPoint: Offset? = null
+    tapPoint: Offset? = null,
+    flag: Int = -1
 ) {
+    val flagColor = when (flag) {
+        0 -> Color(0xFFE85D4A)   // frente (rojo)
+        1 -> Color(0xFFF4F1E8)   // medio (blanco)
+        2 -> Color(0xFF5AB0FF)   // fondo (azul)
+        else -> FlagRed
+    }
     val w = size.width
     val h = size.height
     val f = holeFeatures[hole.number] ?: HoleFeatures(0f, emptyList())
@@ -494,7 +501,7 @@ private fun DrawScope.drawHoleMap(
         lineTo(poleTop.x, poleTop.y + gr * 0.56f)
         close()
     }
-    drawPath(flagPath, FlagRed)
+    drawPath(flagPath, flagColor)
     drawCircle(Color(0x33000000), radius = 5f, center = Offset(greenP.x, greenP.y + 2f))
     drawCircle(Pole, radius = 3.5f, center = greenP)
 

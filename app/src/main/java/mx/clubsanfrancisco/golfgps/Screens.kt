@@ -3,7 +3,9 @@ package mx.clubsanfrancisco.golfgps
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -129,7 +131,18 @@ private fun RangeScreen(vm: GolfViewModel, onRequestPermission: () -> Unit) {
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 16.dp)
+            .pointerInput(Unit) {
+                var total = 0f
+                detectHorizontalDragGestures(
+                    onDragStart = { total = 0f },
+                    onDragEnd = {
+                        if (total <= -70f) vm.nextHole()
+                        else if (total >= 70f) vm.previousHole()
+                    },
+                    onHorizontalDrag = { _, dx -> total += dx }
+                )
+            },
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         item {
@@ -301,7 +314,7 @@ private fun RangeScreen(vm: GolfViewModel, onRequestPermission: () -> Unit) {
 
             Spacer(Modifier.height(12.dp))
 
-            HoleMapCard(hole, vm.userLat, vm.userLng, vm.units)
+            HoleMapCard(hole, vm.userLat, vm.userLng, vm.units, flag)
 
             Spacer(Modifier.height(12.dp))
 
@@ -329,6 +342,15 @@ private fun RangeScreen(vm: GolfViewModel, onRequestPermission: () -> Unit) {
                     contentPadding = PaddingValues(horizontal = 4.dp)
                 ) { Text("Next ▶", maxLines = 1) }
             }
+
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "◀ Desliza para cambiar de hoyo ▶",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center
+            )
 
             Spacer(Modifier.height(16.dp))
             Text(
@@ -486,7 +508,7 @@ private fun StrokeRow(
                         Text(
                             scoreName(diff),
                             style = MaterialTheme.typography.bodySmall,
-                            color = scoreColor(diff)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -502,8 +524,7 @@ private fun StrokeRow(
                     textAlign = TextAlign.Center,
                     fontSize = 26.sp,
                     fontWeight = FontWeight.Black,
-                    color = if (strokes > 0) scoreColor(strokes - par)
-                            else MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Button(
                     onClick = onAdd,

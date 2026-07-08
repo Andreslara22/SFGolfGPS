@@ -53,15 +53,6 @@ private val Mint = Color(0xFF7ADFA8)
 private val Dim = Color(0xFF9BB8A8)
 private val Amber = Color(0xFFF3B61F)
 
-// Color del golpe según el score (igual que el teléfono):
-// eagle+ naranja · birdie azul · par dorado · bogey+ blanco.
-private fun scoreColor(diff: Int): Color = when {
-    diff <= -2 -> Color(0xFFF0912B)
-    diff == -1 -> Color(0xFF4DA3FF)
-    diff == 0 -> Color(0xFFF3B61F)
-    else -> Color.White
-}
-
 // Data Layer: snapshot completo de la ronda (mismo formato que la app de teléfono).
 private const val STATE_PATH = "/round/state"
 private const val KEY_NAMES = "names"
@@ -391,7 +382,7 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                                     Modifier.width(40.dp),
                                     fontSize = 26.sp,
                                     fontWeight = FontWeight.Black,
-                                    color = if (strokeVal > 0) scoreColor(strokeVal - hole.par) else Mint,
+                                    color = Color.White,
                                     textAlign = TextAlign.Center
                                 )
                                 Text("GOLPES", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = Dim)
