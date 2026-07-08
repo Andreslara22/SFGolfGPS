@@ -159,8 +159,13 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
         // Modo Ambient: al bajar la muñeca la app NO se cierra; se queda activa
         // con la pantalla apagada/atenuada y vuelve a la app al levantar la muñeca.
         ambient = AmbientLifecycleObserver(this, object : AmbientLifecycleObserver.AmbientLifecycleCallback {
-            override fun onEnterAmbient(ambientDetails: AmbientLifecycleObserver.AmbientDetails) {}
-            override fun onExitAmbient() { resetIdle() }
+            override fun onEnterAmbient(ambientDetails: AmbientLifecycleObserver.AmbientDetails) {
+                if (granted) startGps(fast = false)   // GPS lento: ahorra batería
+            }
+            override fun onExitAmbient() {
+                resetIdle()
+                if (granted) startGps(fast = true)    // GPS rápido al ver el reloj
+            }
             override fun onUpdateAmbient() {}
         })
         lifecycle.addObserver(ambient)
@@ -196,10 +201,17 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
         dataClient.removeListener(this)
     }
 
-    private fun startGps() {
+    /**
+     * GPS adaptativo para cuidar batería en rondas de 4+ horas:
+     * fast=true (pantalla activa) cada 1 s · fast=false (ambient, muñeca
+     * abajo — la mayor parte de la ronda) cada 8 s / 8 m.
+     */
+    private fun startGps(fast: Boolean = true) {
         try {
             if (lm.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-                lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000L, 1f, listener)
+                lm.removeUpdates(listener)
+                if (fast) lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000L, 1f, listener)
+                else lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 8000L, 8f, listener)
                 lm.getLastKnownLocation(LocationManager.GPS_PROVIDER)?.let {
                     lat = it.latitude; lng = it.longitude
                 }
