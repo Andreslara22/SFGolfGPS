@@ -6,6 +6,8 @@ import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -37,6 +39,7 @@ import androidx.core.content.ContextCompat
 import androidx.wear.compose.material.Button
 import androidx.wear.compose.material.ButtonDefaults
 import androidx.wear.compose.material.MaterialTheme
+import androidx.wear.ambient.AmbientLifecycleObserver
 import androidx.wear.compose.material.Scaffold
 import androidx.wear.compose.material.Text
 import androidx.wear.compose.material.TimeText
@@ -62,6 +65,9 @@ private const val KEY_HOLE = "hole"
 private const val KEY_UNITS = "units"
 private const val KEY_AUTO = "auto"
 private const val KEY_TS = "ts"
+
+// Tras 1 hora sin interacción, la app se cierra y vuelve la carátula normal.
+private const val AUTO_EXIT_MS = 3_600_000L
 private const val SEP = ""
 
 /** Jugador en el reloj: nombre + 18 golpes (espejo de la app de teléfono). */
@@ -74,6 +80,9 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
 
     private lateinit var lm: LocationManager
     private val dataClient: DataClient by lazy { Wearable.getDataClient(this) }
+    private lateinit var ambient: AmbientLifecycleObserver
+    private val idleHandler = Handler(Looper.getMainLooper())
+    private val idleRunnable = Runnable { finish() }
 
     private var lat by mutableStateOf<Double?>(null)
     private var lng by mutableStateOf<Double?>(null)
@@ -117,6 +126,16 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
 
         loadLocal()
         setContent { WatchApp() }
+
+        // Modo Ambient: al bajar la muñeca la app NO se cierra; se queda activa
+        // con la pantalla apagada/atenuada y vuelve a la app al levantar la muñeca.
+        ambient = AmbientLifecycleObserver(this, object : AmbientLifecycleObserver.AmbientLifecycleCallback {
+            override fun onEnterAmbient(ambientDetails: AmbientLifecycleObserver.AmbientDetails) {}
+            override fun onExitAmbient() { resetIdle() }
+            override fun onUpdateAmbient() {}
+        })
+        lifecycle.addObserver(ambient)
+        resetIdle()
 
         // Trae el último snapshot publicado por el teléfono.
         dataClient.dataItems.addOnSuccessListener { items ->
@@ -235,8 +254,20 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
         }
     }
 
+    override fun onUserInteraction() {
+        super.onUserInteraction()
+        resetIdle()
+    }
+
+    /** Reinicia el temporizador de auto-cierre (1 h de inactividad). */
+    private fun resetIdle() {
+        idleHandler.removeCallbacks(idleRunnable)
+        idleHandler.postDelayed(idleRunnable, AUTO_EXIT_MS)
+    }
+
     override fun onDestroy() {
         super.onDestroy()
+        idleHandler.removeCallbacks(idleRunnable)
         lm.removeUpdates(listener)
     }
 
