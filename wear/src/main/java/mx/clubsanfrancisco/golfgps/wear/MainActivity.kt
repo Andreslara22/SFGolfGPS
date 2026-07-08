@@ -358,10 +358,6 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                                     front?.toString() ?: "–",
                                     fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White
                                 )
-                                Text(
-                                    (if (useMeters) "M" else "YD") + " · B/C/F",
-                                    fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Dim
-                                )
                             }
                             Spacer(Modifier.weight(0.95f))
                         }
