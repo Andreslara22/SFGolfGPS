@@ -16,6 +16,7 @@ embebidos localmente. Funciona sin internet.
 - **Juegos**: **Skins** con acarreo de empates para 2-5 jugadores (corona 👑 al líder y pozo acarreado visible), **Match Play** clásico para 2 jugadores ("2 UP thru 7", "gana 3&2") y **Stableford con handicap**: cada jugador configura su handicap (0-40) en Players, el stroke index de cada hoyo reparte los golpes de ventaja y los puntos son los tradicionales (par neto 2 · birdie 3 · bogey 1 · doble bogey neto o peor 0). Todo calculado en vivo de los golpes ya anotados, sin captura extra.
 - **Medir golpe** 📏: marca la bola antes de pegar, camina a donde cayó y guarda — la app aprende tus distancias reales por palo (media móvil 70/30) y el palo sugerido usa TUS números.
 - **Pestaña Stats** 📊: promedio y mejor score, putts por ronda, %GIR, %FIR, tendencia de las últimas 10 rondas y promedio por hoyo con tus 3 hoyos más caros vs par (🔥), por jugador.
+- **Compartir tarjeta como imagen** 📤: botón en el Scorecard que genera un PNG con la tarjeta completa (ida/vuelta, OUT/IN/TOTAL, vs par, puntos Stableford y stats) y lo manda al share sheet de Android (WhatsApp, correo, etc.).
 - **Handicap index (WHS)**: diferenciales con rating/slope oficiales del campo (salidas Blancas 69.1/131) y mejores 8 de las últimas 20 rondas completas (tabla oficial para menos rondas, mínimo 3). Visible en Stats y junto a cada jugador.
 - **Tema oscuro verde** (fairway) + tema claro + modo sistema.
 - **Yardas / metros** configurables.

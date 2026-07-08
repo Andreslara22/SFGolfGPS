@@ -1,5 +1,6 @@
 package mx.clubsanfrancisco.golfgps
 
+import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
@@ -746,6 +747,8 @@ private fun scoreColor(diff: Int): Color = when {
 private fun ScorecardScreen(vm: GolfViewModel) {
     var showFinishDialog by remember { mutableStateOf(false) }
     val dateFmt = remember { SimpleDateFormat("MMM d · h:mm a", Locale.US) }
+    val context = LocalContext.current
+    val anyScores = vm.players.any { it.playedHoles() > 0 }
 
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
         item {
@@ -962,6 +965,18 @@ private fun ScorecardScreen(vm: GolfViewModel) {
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp)
             ) { Text("🏁 Finish round & save") }
+
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = {
+                    ScorecardImage.shareIntent(context, vm)?.let {
+                        context.startActivity(Intent.createChooser(it, "Compartir tarjeta"))
+                    }
+                },
+                enabled = anyScores,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp)
+            ) { Text("📤 Compartir tarjeta como imagen") }
 
             Spacer(Modifier.height(22.dp))
             Text("Round history", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
