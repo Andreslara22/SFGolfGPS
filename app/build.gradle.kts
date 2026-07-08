@@ -55,4 +55,14 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("com.google.android.gms:play-services-wearable:18.1.0")
+    // Cuenta opcional + respaldo en la nube (se activa al agregar google-services.json)
+    implementation(platform("com.google.firebase:firebase-bom:32.7.4"))
+    implementation("com.google.firebase:firebase-auth-ktx")
+    implementation("com.google.firebase:firebase-firestore-ktx")
+}
+
+// El plugin de Google Services solo se aplica si existe la configuración del
+// proyecto Firebase. Sin el json, la app compila y corre 100% local.
+if (project.file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
 }

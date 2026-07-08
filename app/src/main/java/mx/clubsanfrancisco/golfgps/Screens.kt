@@ -50,8 +50,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -1229,6 +1231,9 @@ private fun SettingsScreen(vm: GolfViewModel) {
             }
 
             Spacer(Modifier.height(22.dp))
+            AccountSection(vm)
+
+            Spacer(Modifier.height(22.dp))
             Text("Round", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(8.dp))
             Button(
@@ -1273,6 +1278,141 @@ private fun SettingsScreen(vm: GolfViewModel) {
                 TextButton(onClick = { showResetDialog = false }) { Text("Cancel") }
             }
         )
+    }
+}
+
+/**
+ * Cuenta opcional + respaldo en la nube. Solo aparece si el proyecto tiene
+ * Firebase configurado (google-services.json); si no, la app es 100% local.
+ */
+@Composable
+private fun AccountSection(vm: GolfViewModel) {
+    val context = LocalContext.current
+    if (!Cloud.isConfigured(context)) return
+
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var signedEmail by remember { mutableStateOf(Cloud.currentEmail()) }
+    var status by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+
+    Text("Cuenta y respaldo (opcional)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+    Text(
+        "Con una cuenta, tus jugadores, palos e historial de rondas se respaldan " +
+        "en la nube y se restauran si cambias de teléfono. Sin cuenta, todo sigue " +
+        "funcionando igual, guardado en este dispositivo.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+    Spacer(Modifier.height(8.dp))
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(Modifier.padding(14.dp)) {
+            val current = signedEmail
+            if (current == null) {
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = { email = it },
+                    label = { Text("Correo") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    label = { Text("Contraseña") },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        enabled = !busy && email.isNotBlank() && password.length >= 6,
+                        onClick = {
+                            busy = true; status = null
+                            Cloud.signIn(email, password) { err ->
+                                busy = false
+                                if (err == null) { signedEmail = Cloud.currentEmail(); status = "Sesión iniciada" }
+                                else status = err
+                            }
+                        }
+                    ) { Text("Iniciar sesión") }
+                    OutlinedButton(
+                        enabled = !busy && email.isNotBlank() && password.length >= 6,
+                        onClick = {
+                            busy = true; status = null
+                            Cloud.signUp(email, password) { err ->
+                                busy = false
+                                if (err == null) { signedEmail = Cloud.currentEmail(); status = "Cuenta creada" }
+                                else status = err
+                            }
+                        }
+                    ) { Text("Crear cuenta") }
+                }
+                TextButton(
+                    enabled = !busy && email.isNotBlank(),
+                    onClick = {
+                        busy = true; status = null
+                        Cloud.sendPasswordReset(email) { err ->
+                            busy = false
+                            status = err ?: "Te enviamos un correo para restablecerla"
+                        }
+                    }
+                ) { Text("¿Olvidaste tu contraseña?") }
+                if (password.isNotEmpty() && password.length < 6) {
+                    Text(
+                        "La contraseña debe tener al menos 6 caracteres",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                Text("Sesión: $current", fontWeight = FontWeight.SemiBold)
+                Text(
+                    "El respaldo se sube solo al cerrar cada ronda.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        enabled = !busy,
+                        onClick = {
+                            busy = true; status = null
+                            Cloud.backup(vm.cloudBackupData()) { err ->
+                                busy = false
+                                status = err ?: "Respaldo guardado ✓"
+                            }
+                        }
+                    ) { Text("Respaldar ahora") }
+                    OutlinedButton(
+                        enabled = !busy,
+                        onClick = {
+                            busy = true; status = null
+                            Cloud.restore { data, err ->
+                                busy = false
+                                if (data != null) { vm.applyCloudData(data); status = "Datos restaurados ✓" }
+                                else status = err
+                            }
+                        }
+                    ) { Text("Restaurar") }
+                }
+                TextButton(onClick = {
+                    Cloud.signOut()
+                    signedEmail = null
+                    status = "Sesión cerrada (tus datos locales siguen aquí)"
+                }) { Text("Cerrar sesión") }
+            }
+            status?.let {
+                Spacer(Modifier.height(4.dp))
+                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+            }
+        }
     }
 }
 

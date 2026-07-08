@@ -27,6 +27,35 @@ embebidos localmente. Funciona sin internet.
    `Build > Build Bundle(s) / APK(s) > Build APK(s)`.
 4. Instala el APK. Al abrirla, acepta el permiso de **ubicación precisa**.
 
+## Cuenta y respaldo en la nube (opcional)
+
+El código de login (crear cuenta / iniciar sesión / olvidé mi contraseña) y el
+respaldo del historial ya están integrados con **Firebase**, pero la sección de
+"Cuenta" solo aparece si el proyecto tiene la configuración. Para activarla:
+
+1. Entra a https://console.firebase.google.com → **Crear proyecto** (`SF Golf`,
+   Analytics desactivado).
+2. **Agregar app → Android** con package `mx.clubsanfrancisco.golfgps` y
+   descarga el `google-services.json`.
+3. Pon el archivo en **`app/google-services.json`** de este repo y haz push
+   (el build lo detecta y activa Firebase solo).
+4. En la consola: **Authentication → Sign-in method → Email/Password: habilitar**.
+5. **Firestore Database → Crear base de datos** y en *Rules* pega:
+   ```
+   rules_version = '2';
+   service cloud.firestore {
+     match /databases/{database}/documents {
+       match /users/{userId} {
+         allow read, write: if request.auth != null && request.auth.uid == userId;
+       }
+     }
+   }
+   ```
+
+Sin el json, la app compila y funciona 100% local (sin sección de cuenta).
+El respaldo (jugadores, palos, historial, elevaciones) se sube al cerrar cada
+ronda y con el botón "Respaldar ahora"; "Restaurar" lo baja en otro teléfono.
+
 ## Notas técnicas
 - `minSdk 26` (Android 8.0+), `targetSdk 34`.
 - GPS: `GPS_PROVIDER`, actualización cada 1 s / 1 m.

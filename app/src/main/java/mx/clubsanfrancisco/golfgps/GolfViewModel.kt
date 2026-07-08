@@ -241,6 +241,46 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
         dataClient.removeListener(this)
     }
 
+    // --- Respaldo en la nube (cuenta opcional; ver Cloud.kt) ---
+    // El respaldo son las mismas cadenas serializadas de SharedPreferences,
+    // así restaurar es reescribirlas y recargar el estado.
+
+    private val cloudKeys = listOf(
+        "names", "scores", "clubs", "putts", "firs", "flags",
+        "units", "theme", "history", "greenElev"
+    )
+
+    /** Estado actual serializado, listo para subir. */
+    fun cloudBackupData(): Map<String, Any?> {
+        saveState()
+        val out = mutableMapOf<String, Any?>("updatedAt" to System.currentTimeMillis())
+        cloudKeys.forEach { k -> prefs.getString(k, null)?.let { out[k] = it } }
+        return out
+    }
+
+    /** Aplica un respaldo descargado: sobreescribe prefs y recarga todo. */
+    fun applyCloudData(data: Map<String, Any?>) {
+        val ed = prefs.edit()
+        cloudKeys.forEach { k -> (data[k] as? String)?.let { ed.putString(k, it) } }
+        ed.apply()
+        players.clear()
+        history.clear()
+        for (i in 0 until 18) flags[i] = -1
+        loadState()
+        if (players.isEmpty()) players.add(Player("Player 1"))
+        if (activePlayerIndex >= players.size) activePlayerIndex = 0
+        currentHoleIndex = 0
+        syncOut()
+    }
+
+    /** Respaldo silencioso tras cerrar ronda, si hay sesión iniciada. */
+    private fun autoCloudBackup() {
+        val ctx = getApplication<Application>()
+        if (Cloud.isConfigured(ctx) && Cloud.currentEmail() != null) {
+            Cloud.backup(cloudBackupData()) { }
+        }
+    }
+
     val currentHole: Hole get() = CourseData.holes[currentHoleIndex]
 
     fun onLocation(lat: Double, lng: Double, accuracy: Float, altitudeM: Double? = null) {
@@ -532,6 +572,7 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
         currentHoleIndex = 0
         autoDetect = false
         syncOut()
+        autoCloudBackup()
     }
 
     /** Clears current strokes without saving to history. */
