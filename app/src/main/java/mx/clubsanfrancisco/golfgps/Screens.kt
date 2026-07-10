@@ -18,7 +18,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -50,9 +52,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
@@ -104,6 +110,8 @@ fun GolfApp(vm: GolfViewModel, onRequestPermission: () -> Unit) {
 }
 
 // ---------------------------------------------------------------- Range (GPS)
+// Rediseño "map-first" (referencia: Hole19/18Birdies): el mapa es la pantalla,
+// las distancias van superpuestas y la anotación es una barra compacta.
 
 @Composable
 private fun RangeScreen(vm: GolfViewModel, onRequestPermission: () -> Unit) {
@@ -112,8 +120,8 @@ private fun RangeScreen(vm: GolfViewModel, onRequestPermission: () -> Unit) {
     val yards = vm.units == Units.YARDS
     val haptics = LocalHapticFeedback.current
 
-    // Pin position shifts the target proportionally to this green's depth:
-    // red (front) ≈ -depth/4 · blue (back) ≈ +depth/4
+    // El pin del día desplaza el objetivo según la profundidad de este green:
+    // rojo (frente) ≈ -depth/4 · azul (fondo) ≈ +depth/4
     val flag = vm.flags[vm.currentHoleIndex]
     val pinShiftM = hole.greenDepthM / 4.0
     val flagOffsetM = when (flag) { 0 -> -pinShiftM; 2 -> pinShiftM; else -> 0.0 }
@@ -123,20 +131,24 @@ private fun RangeScreen(vm: GolfViewModel, onRequestPermission: () -> Unit) {
         if (yards) metersToYards(it).roundToInt() else it.roundToInt()
     }
     val unitShort = if (yards) "yd" else "m"
-    val refDist = if (yards) metersToYards(hole.referenceMeters).roundToInt()
-                  else hole.referenceMeters.roundToInt()
 
-    // "Plays like": distancia efectiva por elevación (autocalibrada en greens).
+    // "Juega como": distancia efectiva por elevación (autocalibrada en greens).
     val elevDeltaM = vm.elevationDeltaM()
     val playsLikeAdjM = vm.playsLikeMeters()?.plus(flagOffsetM)?.coerceAtLeast(0.0)
 
     // El palo sugerido usa la distancia efectiva cuando existe.
     val clubYards = (playsLikeAdjM ?: distAdjM)?.let { metersToYards(it) }
 
+    // Mapa héroe: ~55% del alto de la pantalla.
+    val mapHeight = (LocalConfiguration.current.screenHeightDp * 0.55f)
+        .roundToInt().coerceIn(360, 620).dp
+
+    var showAllPlayers by rememberSaveable { mutableStateOf(false) }
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp)
+            .padding(horizontal = 12.dp)
             .pointerInput(Unit) {
                 var total = 0f
                 detectHorizontalDragGestures(
@@ -147,162 +159,242 @@ private fun RangeScreen(vm: GolfViewModel, onRequestPermission: () -> Unit) {
                     },
                     onHorizontalDrag = { _, dx -> total += dx }
                 )
-            },
-        horizontalAlignment = Alignment.CenterHorizontally
+            }
     ) {
         item {
-            Spacer(Modifier.height(14.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Spacer(Modifier.height(8.dp))
+
+            // ---- Header compacto: ‹ HOYO n · PAR p › + AUTO + pin del día ----
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    "⛳ HOYO ${hole.number}",
-                    style = MaterialTheme.typography.headlineMedium,
+                    "‹", fontSize = 30.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .clickable { vm.previousHole() }
+                        .padding(horizontal = 10.dp)
+                )
+                Text(
+                    "HOYO ${hole.number}",
+                    style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Black,
                     color = MaterialTheme.colorScheme.primary
                 )
-                Spacer(Modifier.width(10.dp))
-                Pill("PAR ${hole.par}", MaterialTheme.colorScheme.primary,
-                    MaterialTheme.colorScheme.onPrimary)
-                if (vm.autoDetect) {
-                    Spacer(Modifier.width(6.dp))
-                    Pill("AUTO", MaterialTheme.colorScheme.secondaryContainer,
-                        MaterialTheme.colorScheme.onSecondaryContainer)
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    "· PAR ${hole.par}",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    "›", fontSize = 30.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .clickable { vm.nextHole() }
+                        .padding(horizontal = 10.dp)
+                )
+                Spacer(Modifier.weight(1f))
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = if (vm.autoDetect) MaterialTheme.colorScheme.primaryContainer
+                            else MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .clickable { vm.toggleAutoDetect() }
+                ) {
+                    Text(
+                        "AUTO",
+                        Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Black,
+                        color = if (vm.autoDetect) MaterialTheme.colorScheme.onPrimaryContainer
+                                else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+                FlagChip(flag) {
+                    val next = when (flag) { -1 -> 0; 0 -> 1; 1 -> 2; else -> -1 }
+                    if (next == -1) vm.clearFlags() else vm.setFlagRotation(vm.currentHoleIndex, next)
                 }
             }
-            Text(
-                "Tee → green: $refDist $unitShort",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(Modifier.height(10.dp))
-            FlagChip(flag) {
-                val next = when (flag) { -1 -> 0; 0 -> 1; 1 -> 2; else -> -1 }
-                if (next == -1) vm.clearFlags() else vm.setFlagRotation(vm.currentHoleIndex, next)
-            }
 
-            Spacer(Modifier.height(10.dp))
+            // ---- Estado del GPS: puntito de color + valor ----
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(start = 12.dp, top = 2.dp, bottom = 8.dp)
+            ) {
+                val acc = vm.gpsAccuracyM
+                val dotColor = when {
+                    !vm.hasLocationPermission || acc == null ->
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    acc <= 5f -> Color(0xFF4ADE80)
+                    acc <= 15f -> Color(0xFFF3B61F)
+                    else -> Color(0xFFE85D4A)
+                }
+                Box(Modifier.size(8.dp).clip(CircleShape).background(dotColor))
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    when {
+                        !vm.hasLocationPermission -> "GPS desactivado"
+                        acc == null -> "Buscando señal GPS…"
+                        else -> "GPS ±${acc.roundToInt()} m"
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
 
             if (!vm.hasLocationPermission) {
-                Spacer(Modifier.height(24.dp))
-                Text(
-                    "Se necesita permiso de ubicación para medir tu distancia al green.",
-                    textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(12.dp))
-                Button(onClick = onRequestPermission) { Text("Activar GPS") }
-                Spacer(Modifier.height(24.dp))
-            } else {
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Text(
-                        text = distValue?.toString() ?: "– – –",
-                        fontSize = 108.sp,
-                        fontWeight = FontWeight.Black,
-                        color = MaterialTheme.colorScheme.onBackground,
-                        lineHeight = 108.sp
-                    )
-                    Text(
-                        " $unitShort",
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(bottom = 18.dp)
-                    )
-                }
-                Text(
-                    when (flag) {
-                        0 -> "al pin ROJO (frente)"
-                        1 -> "al pin BLANCO (medio)"
-                        2 -> "al pin AZUL (fondo)"
-                        else -> "al centro del green"
-                    },
-                    style = MaterialTheme.typography.titleMedium,
-                    color = when (flag) {
-                        0 -> Color(0xFFE85D4A)
-                        2 -> Color(0xFF5AB0FF)
-                        else -> MaterialTheme.colorScheme.primary
-                    },
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    vm.gpsAccuracyM?.let { "🛰️ Precisión GPS: ±${it.roundToInt()} m" }
-                        ?: "🛰️ Buscando señal GPS…",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                // "Plays like" por elevación (aparece tras pisar este green una vez)
-                if (playsLikeAdjM != null && elevDeltaM != null) {
-                    val plV = if (yards) metersToYards(playsLikeAdjM).roundToInt()
-                              else playsLikeAdjM.roundToInt()
-                    val up = elevDeltaM > 0
-                    Spacer(Modifier.height(4.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                Card(
+                    Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Column(Modifier.padding(14.dp)) {
                         Text(
-                            "JUEGA COMO ",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
+                            "Se necesita permiso de ubicación para medir tu distancia al green.",
+                            style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Text(
-                            "$plV $unitShort",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Black,
-                            color = if (up) Color(0xFFE85D4A) else Color(0xFF5AB0FF)
-                        )
-                        Text(
-                            if (up) "  ▲ +${elevDeltaM.roundToInt()} m"
-                            else "  ▼ ${elevDeltaM.roundToInt()} m",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = if (up) Color(0xFFE85D4A) else Color(0xFF5AB0FF)
-                        )
+                        Spacer(Modifier.height(8.dp))
+                        Button(onClick = onRequestPermission) { Text("Activar GPS") }
                     }
                 }
-                if (distAdjM != null) {
-                    // Front/back usando la distancia ajustada al pin del día
-                    val half = hole.greenDepthM / 2.0
-                    val fM = (distAdjM - half).coerceAtLeast(0.0)
-                    val bM = distAdjM + half
-                    val fV = if (yards) metersToYards(fM).roundToInt() else fM.roundToInt()
-                    val bV = if (yards) metersToYards(bM).roundToInt() else bM.roundToInt()
-                    Spacer(Modifier.height(4.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                        FcbLabel("F", fV)
-                        FcbLabel("C", distValue ?: 0)
-                        FcbLabel("B", bV)
-                    }
-                }
+                Spacer(Modifier.height(10.dp))
             }
 
-            Spacer(Modifier.height(14.dp))
-
-            val activeP = vm.players.getOrNull(vm.activePlayerIndex) ?: vm.players.first()
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
-            ) {
-                Column(Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("🏌️", fontSize = 30.sp)
-                        Spacer(Modifier.width(12.dp))
-                        Column {
+            // ---- Mapa héroe con distancias superpuestas (B/C/F, como el reloj) ----
+            Box(Modifier.fillMaxWidth()) {
+                HoleMapCard(hole, vm.userLat, vm.userLng, vm.units, flag, height = mapHeight)
+                if (vm.hasLocationPermission) {
+                    val mapShadow = Shadow(Color(0xCC1E2A1E), Offset(0f, 3f), 10f)
+                    Column(
+                        Modifier
+                            .align(Alignment.TopStart)
+                            .padding(start = 16.dp, top = 14.dp)
+                    ) {
+                        if (distAdjM != null && distValue != null) {
+                            val half = hole.greenDepthM / 2.0
+                            val fM = (distAdjM - half).coerceAtLeast(0.0)
+                            val bM = distAdjM + half
+                            val fV = if (yards) metersToYards(fM).roundToInt() else fM.roundToInt()
+                            val bV = if (yards) metersToYards(bM).roundToInt() else bM.roundToInt()
+                            OverlayFcb("B", bV, mapShadow)
+                            Row(verticalAlignment = Alignment.Bottom) {
+                                Text(
+                                    "$distValue",
+                                    fontSize = 58.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = Color.White,
+                                    lineHeight = 58.sp,
+                                    style = TextStyle(shadow = mapShadow)
+                                )
+                                Text(
+                                    " $unitShort",
+                                    fontSize = 17.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF7ADFA8),
+                                    style = TextStyle(shadow = mapShadow),
+                                    modifier = Modifier.padding(bottom = 9.dp)
+                                )
+                            }
+                            OverlayFcb("F", fV, mapShadow)
+                            if (playsLikeAdjM != null && elevDeltaM != null) {
+                                val plV = if (yards) metersToYards(playsLikeAdjM).roundToInt()
+                                          else playsLikeAdjM.roundToInt()
+                                val up = elevDeltaM > 0
+                                Spacer(Modifier.height(6.dp))
+                                Surface(shape = RoundedCornerShape(50), color = Color(0xB3061E14)) {
+                                    Text(
+                                        "JUEGA COMO $plV ${if (up) "▲" else "▼"}",
+                                        Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Black,
+                                        color = if (up) Color(0xFFFF8A7A) else Color(0xFF7CC4FF)
+                                    )
+                                }
+                            }
+                        } else {
                             Text(
-                                "PALO SUGERIDO · ${activeP.name.uppercase().take(12)}",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                clubYards?.let { clubForDistance(it, activeP.clubYards) } ?: "Esperando GPS",
-                                style = MaterialTheme.typography.headlineSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
+                                "– –",
+                                fontSize = 58.sp,
+                                fontWeight = FontWeight.Black,
+                                color = Color.White,
+                                style = TextStyle(shadow = mapShadow)
                             )
                         }
                     }
+                }
+            }
+
+            Spacer(Modifier.height(10.dp))
+
+            // ---- Herramientas: palo sugerido + medir golpe, en una fila ----
+            if (vm.hasLocationPermission && vm.shotClubIdx >= 0) {
+                ShotMeasureCard(vm)
+            } else {
+                val activeP = vm.players.getOrNull(vm.activePlayerIndex) ?: vm.players.first()
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(IntrinsicSize.Min),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Card(
+                        Modifier.weight(1f),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Row(
+                            Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("🏌️", fontSize = 22.sp)
+                            Spacer(Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    "PALO SUGERIDO",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    clubYards?.let { clubForDistance(it, activeP.clubYards) } ?: "Esperando GPS",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+                    }
+                    if (vm.hasLocationPermission) {
+                        Button(
+                            enabled = vm.userLat != null,
+                            onClick = {
+                                val idx = if (clubYards != null)
+                                    clubIndexForDistance(clubYards, activeP.clubYards) else 0
+                                vm.markShot(idx)
+                            },
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier.fillMaxHeight()
+                        ) { Text("📏 Medir", maxLines = 1) }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(10.dp))
+
+            // ---- Barra de anotación del jugador activo ----
+            Card(
+                Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
                     if (vm.players.size > 1) {
-                        Spacer(Modifier.height(8.dp))
                         Row(
                             Modifier.horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -313,189 +405,216 @@ private fun RangeScreen(vm: GolfViewModel, onRequestPermission: () -> Unit) {
                                 }
                             }
                         }
+                        Spacer(Modifier.height(8.dp))
+                    }
+                    val p = vm.players.getOrNull(vm.activePlayerIndex) ?: vm.players.first()
+                    val strokes = p.strokes[vm.currentHoleIndex]
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedButton(
+                            onClick = { vm.removeStroke(vm.activePlayerIndex) },
+                            shape = CircleShape,
+                            contentPadding = PaddingValues(0.dp),
+                            modifier = Modifier.size(42.dp)
+                        ) { Text("−", fontSize = 20.sp) }
+                        Column(
+                            Modifier.width(64.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                strokes.toString(),
+                                fontSize = 28.sp,
+                                fontWeight = FontWeight.Black,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            if (strokes > 0) {
+                                Text(
+                                    scoreName(strokes - hole.par),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+                        Button(
+                            onClick = {
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                vm.addStroke(vm.activePlayerIndex)
+                            },
+                            shape = CircleShape,
+                            contentPadding = PaddingValues(0.dp),
+                            modifier = Modifier.size(42.dp)
+                        ) { Text("+", fontSize = 20.sp) }
+                        Spacer(Modifier.weight(1f))
+                        Text(
+                            "PUTTS",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            "−",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .clickable { vm.removePutt(vm.activePlayerIndex) }
+                                .padding(horizontal = 9.dp, vertical = 2.dp)
+                        )
+                        Text(
+                            p.putts[vm.currentHoleIndex].toString(),
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Black,
+                            modifier = Modifier.width(22.dp),
+                            textAlign = TextAlign.Center
+                        )
+                        Text(
+                            "+",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .clickable { vm.addPutt(vm.activePlayerIndex) }
+                                .padding(horizontal = 9.dp, vertical = 2.dp)
+                        )
                     }
                 }
             }
 
-            Spacer(Modifier.height(12.dp))
-
-            if (vm.hasLocationPermission) {
-                ShotMeasureCard(vm, clubYards)
-                Spacer(Modifier.height(12.dp))
-            }
-
-            HoleMapCard(hole, vm.userLat, vm.userLng, vm.units, flag)
-
-            Spacer(Modifier.height(12.dp))
-
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                OutlinedButton(
-                    onClick = { vm.previousHole() },
-                    modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(horizontal = 4.dp)
-                ) { Text("◀ Ant.", maxLines = 1) }
-                OutlinedButton(
-                    onClick = { vm.toggleAutoDetect() },
-                    modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(horizontal = 4.dp),
-                    colors = if (vm.autoDetect)
-                        ButtonDefaults.outlinedButtonColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer)
-                    else ButtonDefaults.outlinedButtonColors()
-                ) { Text("AUTO", maxLines = 1) }
-                OutlinedButton(
-                    onClick = { vm.nextHole() },
-                    modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(horizontal = 4.dp)
-                ) { Text("Sig. ▶", maxLines = 1) }
-            }
-
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "◀ Desliza para cambiar de hoyo ▶",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.fillMaxWidth(),
-                textAlign = TextAlign.Center
-            )
-
-            Spacer(Modifier.height(16.dp))
-            Text(
-                "GOLPES · HOYO ${hole.number}",
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
+            // ---- Expandible: detalle de todos los jugadores ----
+            TextButton(
+                onClick = { showAllPlayers = !showAllPlayers },
                 modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(Modifier.height(6.dp))
+            ) {
+                Text(
+                    if (showAllPlayers) "Ocultar jugadores ▴" else "Todos los jugadores ▾",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
 
-        itemsIndexed(vm.players) { i, player ->
-            StrokeRow(
-                name = player.name,
-                strokes = player.strokes[vm.currentHoleIndex],
-                par = hole.par,
-                onAdd = {
-                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                    vm.addStroke(i)
-                },
-                onRemove = { vm.removeStroke(i) },
-                putts = player.putts[vm.currentHoleIndex],
-                onPuttAdd = { vm.addPutt(i) },
-                onPuttRemove = { vm.removePutt(i) },
-                fir = player.fir[vm.currentHoleIndex],
-                onFirCycle = { vm.cycleFir(i) },
-                showFir = hole.par >= 4
-            )
-            Spacer(Modifier.height(8.dp))
+        if (showAllPlayers) {
+            itemsIndexed(vm.players) { i, player ->
+                StrokeRow(
+                    name = player.name,
+                    strokes = player.strokes[vm.currentHoleIndex],
+                    par = hole.par,
+                    onAdd = {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        vm.addStroke(i)
+                    },
+                    onRemove = { vm.removeStroke(i) },
+                    putts = player.putts[vm.currentHoleIndex],
+                    onPuttAdd = { vm.addPutt(i) },
+                    onPuttRemove = { vm.removePutt(i) },
+                    fir = player.fir[vm.currentHoleIndex],
+                    onFirCycle = { vm.cycleFir(i) },
+                    showFir = hole.par >= 4
+                )
+                Spacer(Modifier.height(8.dp))
+            }
         }
 
         item { Spacer(Modifier.height(16.dp)) }
     }
 }
 
+/** Fila B/F del overlay de distancias sobre el mapa. */
+@Composable
+private fun OverlayFcb(letter: String, value: Int, shadow: Shadow) {
+    Row(verticalAlignment = Alignment.Bottom) {
+        Text(
+            letter,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Black,
+            color = Color(0xFFC9F5DC),
+            style = TextStyle(shadow = shadow),
+            modifier = Modifier.padding(bottom = 2.dp)
+        )
+        Spacer(Modifier.width(5.dp))
+        Text(
+            value.toString(),
+            fontSize = 19.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.White,
+            style = TextStyle(shadow = shadow)
+        )
+    }
+}
+
 /**
- * Mide el vuelo de un golpe con GPS y aprende la distancia real del palo:
- * marca la bola antes de pegar, camina hasta donde cayó y guarda. El palo
- * queda preseleccionado con el sugerido, corregible con ‹ ›.
+ * Golpe en curso (medición 📏): distancia desde la marca, palo corregible
+ * con ‹ › y guardar/cancelar. Solo se muestra mientras hay un golpe marcado;
+ * el botón "Medir" de la fila de herramientas es quien lo inicia.
  */
 @Composable
-private fun ShotMeasureCard(vm: GolfViewModel, suggestedYards: Double?) {
+private fun ShotMeasureCard(vm: GolfViewModel) {
     val yards = vm.units == Units.YARDS
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
-            if (vm.shotClubIdx < 0) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
+            val distM = vm.shotDistanceM() ?: 0.0
+            val shown = if (yards) metersToYards(distM).roundToInt() else distM.roundToInt()
+            val measuredYd = metersToYards(distM).roundToInt()
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "📏 GOLPE EN CURSO",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            "📏 MEDIR GOLPE",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            "‹",
+                            fontSize = 22.sp,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .clickable { vm.changeShotClub(-1) }
+                                .padding(horizontal = 8.dp)
                         )
                         Text(
-                            "Marca la bola antes de pegar y la app aprende tus distancias reales por palo.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            clubNames.getOrElse(vm.shotClubIdx) { "?" },
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            "›",
+                            fontSize = 22.sp,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .clickable { vm.changeShotClub(1) }
+                                .padding(horizontal = 8.dp)
                         )
                     }
-                    Spacer(Modifier.width(10.dp))
-                    Button(
-                        enabled = vm.userLat != null,
-                        onClick = {
-                            val p = vm.players.getOrNull(vm.activePlayerIndex)
-                            val idx = if (suggestedYards != null && p != null)
-                                clubIndexForDistance(suggestedYards, p.clubYards) else 0
-                            vm.markShot(idx)
-                        },
-                        shape = RoundedCornerShape(14.dp)
-                    ) { Text("Marcar bola", maxLines = 1) }
+                    Text(
+                        "$shown ${if (yards) "yd" else "m"} desde la marca",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Black
+                    )
+                    Text(
+                        "Camina hasta donde cayó y guarda para afinar el palo.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
-            } else {
-                val distM = vm.shotDistanceM() ?: 0.0
-                val shown = if (yards) metersToYards(distM).roundToInt() else distM.roundToInt()
-                val measuredYd = metersToYards(distM).roundToInt()
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            "📏 GOLPE EN CURSO",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                "‹",
-                                fontSize = 22.sp,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier
-                                    .clip(CircleShape)
-                                    .clickable { vm.changeShotClub(-1) }
-                                    .padding(horizontal = 8.dp)
-                            )
-                            Text(
-                                clubNames.getOrElse(vm.shotClubIdx) { "?" },
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Text(
-                                "›",
-                                fontSize = 22.sp,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier
-                                    .clip(CircleShape)
-                                    .clickable { vm.changeShotClub(1) }
-                                    .padding(horizontal = 8.dp)
-                            )
-                        }
-                        Text(
-                            "$shown ${if (yards) "yd" else "m"} desde la marca",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Black
-                        )
-                        Text(
-                            "Camina hasta donde cayó y guarda para afinar el palo.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Spacer(Modifier.width(10.dp))
-                    Column(horizontalAlignment = Alignment.End) {
-                        Button(
-                            enabled = measuredYd in 30..350,
-                            onClick = { vm.saveShotToClub() },
-                            shape = RoundedCornerShape(14.dp)
-                        ) { Text("Guardar", maxLines = 1) }
-                        TextButton(onClick = { vm.cancelShot() }) {
-                            Text("Cancelar", color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
-                        }
+                Spacer(Modifier.width(10.dp))
+                Column(horizontalAlignment = Alignment.End) {
+                    Button(
+                        enabled = measuredYd in 30..350,
+                        onClick = { vm.saveShotToClub() },
+                        shape = RoundedCornerShape(14.dp)
+                    ) { Text("Guardar", maxLines = 1) }
+                    TextButton(onClick = { vm.cancelShot() }) {
+                        Text("Cancelar", color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
                     }
                 }
             }
@@ -521,25 +640,6 @@ private fun PinDot(color: Color, selected: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun FcbLabel(letter: String, value: Int) {
-    Row(verticalAlignment = Alignment.Bottom) {
-        Text(
-            letter,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Black,
-            color = MaterialTheme.colorScheme.primary
-        )
-        Spacer(Modifier.width(3.dp))
-        Text(
-            value.toString(),
-            fontSize = 17.sp,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onBackground
-        )
-    }
-}
-
-@Composable
 private fun StatBadge(label: String, value: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
@@ -553,9 +653,8 @@ private fun StatBadge(label: String, value: String) {
     }
 }
 
-/** Un solo botón de bandera para elegir la posición del pin del día.
- *  Toca para ciclar: sin pin → frente (rojo) → medio (blanco) → fondo (azul).
- *  La bandera cambia de color según la posición. */
+/** Botón compacto del pin del día: círculo con la bandera del color elegido.
+ *  Toca para ciclar: sin pin → frente (rojo) → medio (blanco) → fondo (azul). */
 @Composable
 private fun FlagChip(flag: Int, onClick: () -> Unit) {
     val color = when (flag) {
@@ -564,29 +663,16 @@ private fun FlagChip(flag: Int, onClick: () -> Unit) {
         2 -> Color(0xFF5AB0FF)   // fondo
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
-    val label = when (flag) {
-        0 -> "Pin al frente"; 1 -> "Pin al medio"; 2 -> "Pin al fondo"
-        else -> "Elegir pin"
-    }
     Surface(
-        shape = RoundedCornerShape(50),
+        shape = CircleShape,
         color = MaterialTheme.colorScheme.surfaceVariant,
         modifier = Modifier
-            .clip(RoundedCornerShape(50))
+            .size(34.dp)
+            .clip(CircleShape)
             .clickable(onClick = onClick)
     ) {
-        Row(
-            Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("⚑", fontSize = 20.sp, color = color)
-            Spacer(Modifier.width(8.dp))
-            Text(
-                label,
-                fontWeight = FontWeight.Bold,
-                fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.onSurface
-            )
+        Box(contentAlignment = Alignment.Center) {
+            Text("⚑", fontSize = 17.sp, color = color)
         }
     }
 }

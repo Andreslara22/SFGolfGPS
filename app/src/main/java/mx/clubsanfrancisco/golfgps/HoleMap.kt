@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlin.math.PI
 import kotlin.math.atan2
@@ -83,7 +84,11 @@ private val holeArt: Map<Int, HoleArt> = mapOf(
 )
 
 @Composable
-fun HoleMapCard(hole: Hole, userLat: Double?, userLng: Double?, units: Units, flag: Int = -1) {
+fun HoleMapCard(
+    hole: Hole, userLat: Double?, userLng: Double?, units: Units, flag: Int = -1,
+    /** Alto del mapa (el rediseño map-first lo agranda a ~55% de la pantalla). */
+    height: Dp = 280.dp
+) {
     val density = LocalDensity.current
     val labelPx = with(density) { 13.dp.toPx() }
 
@@ -128,14 +133,14 @@ fun HoleMapCard(hole: Hole, userLat: Double?, userLng: Double?, units: Units, fl
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .height(280.dp),
+            .height(height),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = Waste)
     ) {
         Canvas(
             Modifier
                 .fillMaxWidth()
-                .height(280.dp)
+                .height(height)
                 .pointerInput(hole.number) {
                     detectTapGestures { tap ->
                         val current = tapPoint
