@@ -58,15 +58,17 @@ jobs:
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
             build
 
-      - name: Empaquetar build de simulador
+      # Se sube la carpeta .app directa (sin zip anidado): el zip que GitHub
+      # genera al descargar el artefacto ya trae SFGolfGPS.app en la raíz y
+      # se puede subir tal cual a appetize.io.
+      - name: Preparar build de simulador
         run: |
-          cd build-sim/Build/Products/Release-iphonesimulator
-          zip -qry "$GITHUB_WORKSPACE/SFGolfGPS-simulador.zip" SFGolfGPS.app
-          ls -lh "$GITHUB_WORKSPACE/SFGolfGPS-simulador.zip"
+          mkdir -p sim-upload
+          cp -R build-sim/Build/Products/Release-iphonesimulator/SFGolfGPS.app sim-upload/
 
       - name: Subir build de simulador como artefacto
         uses: actions/upload-artifact@v4
         with:
           name: SFGolfGPS-simulador
-          path: SFGolfGPS-simulador.zip
+          path: sim-upload
           retention-days: 30
