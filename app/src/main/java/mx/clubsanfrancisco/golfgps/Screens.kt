@@ -43,6 +43,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -55,7 +56,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.TextStyle
@@ -69,19 +69,17 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
 
-private enum class Screen(val label: String, val emoji: String) {
-    RANGE("GPS", "⛳"),
-    SCORECARD("Tarjeta", "📋"),
-    STATS("Stats", "📊"),
-    PLAYERS("Jugadores", "🏌️"),
-    SETTINGS("Ajustes", "⚙️")
+private enum class Screen(val emoji: String) {
+    RANGE("⛳"), SCORECARD("📋"), STATS("📊"), PLAYERS("🏌️"), SETTINGS("⚙️")
 }
 
 @Composable
 fun GolfApp(vm: GolfViewModel, onRequestPermission: () -> Unit) {
     var screen by rememberSaveable { mutableStateOf(Screen.RANGE.name) }
     val current = Screen.valueOf(screen)
+    val strings = if (vm.language == AppLanguage.EN) StringsEn else StringsEs
 
+    CompositionLocalProvider(LocalStrings provides strings) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
@@ -91,7 +89,18 @@ fun GolfApp(vm: GolfViewModel, onRequestPermission: () -> Unit) {
                         selected = current == s,
                         onClick = { screen = s.name },
                         icon = { Text(s.emoji, fontSize = 20.sp) },
-                        label = { Text(s.label, maxLines = 1) }
+                        label = {
+                            Text(
+                                when (s) {
+                                    Screen.RANGE -> strings.tabGps
+                                    Screen.SCORECARD -> strings.tabCard
+                                    Screen.STATS -> strings.tabStats
+                                    Screen.PLAYERS -> strings.tabPlayers
+                                    Screen.SETTINGS -> strings.tabSettings
+                                },
+                                maxLines = 1
+                            )
+                        }
                     )
                 }
             }
@@ -107,6 +116,7 @@ fun GolfApp(vm: GolfViewModel, onRequestPermission: () -> Unit) {
             }
         }
     }
+    }
 }
 
 // ---------------------------------------------------------------- Range (GPS)
@@ -115,6 +125,7 @@ fun GolfApp(vm: GolfViewModel, onRequestPermission: () -> Unit) {
 
 @Composable
 private fun RangeScreen(vm: GolfViewModel, onRequestPermission: () -> Unit) {
+    val str = LocalStrings.current
     val hole = vm.currentHole
     val distM = vm.distanceToGreenMeters()
     val yards = vm.units == Units.YARDS
@@ -138,10 +149,6 @@ private fun RangeScreen(vm: GolfViewModel, onRequestPermission: () -> Unit) {
 
     // El palo sugerido usa la distancia efectiva cuando existe.
     val clubYards = (playsLikeAdjM ?: distAdjM)?.let { metersToYards(it) }
-
-    // Mapa héroe: ~55% del alto de la pantalla.
-    val mapHeight = (LocalConfiguration.current.screenHeightDp * 0.55f)
-        .roundToInt().coerceIn(360, 620).dp
 
     var showAllPlayers by rememberSaveable { mutableStateOf(false) }
 
@@ -175,7 +182,7 @@ private fun RangeScreen(vm: GolfViewModel, onRequestPermission: () -> Unit) {
                         .padding(horizontal = 10.dp)
                 )
                 Text(
-                    "HOYO ${hole.number}",
+                    "${str.holeWord} ${hole.number}",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Black,
                     color = MaterialTheme.colorScheme.primary
@@ -237,8 +244,8 @@ private fun RangeScreen(vm: GolfViewModel, onRequestPermission: () -> Unit) {
                 Spacer(Modifier.width(6.dp))
                 Text(
                     when {
-                        !vm.hasLocationPermission -> "GPS desactivado"
-                        acc == null -> "Buscando señal GPS…"
+                        !vm.hasLocationPermission -> str.gpsOff
+                        acc == null -> str.gpsSearching
                         else -> "GPS ±${acc.roundToInt()} m"
                     },
                     style = MaterialTheme.typography.labelSmall,
@@ -254,12 +261,12 @@ private fun RangeScreen(vm: GolfViewModel, onRequestPermission: () -> Unit) {
                 ) {
                     Column(Modifier.padding(14.dp)) {
                         Text(
-                            "Se necesita permiso de ubicación para medir tu distancia al green.",
+                            str.permissionMsg,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(Modifier.height(8.dp))
-                        Button(onClick = onRequestPermission) { Text("Activar GPS") }
+                        Button(onClick = onRequestPermission) { Text(str.enableGps) }
                     }
                 }
                 Spacer(Modifier.height(10.dp))
@@ -267,7 +274,7 @@ private fun RangeScreen(vm: GolfViewModel, onRequestPermission: () -> Unit) {
 
             // ---- Mapa héroe con distancias superpuestas (B/C/F, como el reloj) ----
             Box(Modifier.fillMaxWidth()) {
-                HoleMapCard(hole, vm.userLat, vm.userLng, vm.units, flag, height = mapHeight)
+                HoleMapCard(hole, vm.userLat, vm.userLng, vm.units, flag)
                 if (vm.hasLocationPermission) {
                     val mapShadow = Shadow(Color(0xCC1E2A1E), Offset(0f, 3f), 10f)
                     Column(
@@ -308,7 +315,7 @@ private fun RangeScreen(vm: GolfViewModel, onRequestPermission: () -> Unit) {
                                 Spacer(Modifier.height(6.dp))
                                 Surface(shape = RoundedCornerShape(50), color = Color(0xB3061E14)) {
                                     Text(
-                                        "JUEGA COMO $plV ${if (up) "▲" else "▼"}",
+                                        "${str.playsLike} $plV ${if (up) "▲" else "▼"}",
                                         Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Black,
@@ -355,13 +362,13 @@ private fun RangeScreen(vm: GolfViewModel, onRequestPermission: () -> Unit) {
                             Spacer(Modifier.width(10.dp))
                             Column {
                                 Text(
-                                    "PALO SUGERIDO",
+                                    str.suggestedClub,
                                     fontSize = 9.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Text(
-                                    clubYards?.let { clubForDistance(it, activeP.clubYards) } ?: "Esperando GPS",
+                                    clubYards?.let { clubForDistance(it, activeP.clubYards) } ?: str.waitingGps,
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.primary,
@@ -380,7 +387,7 @@ private fun RangeScreen(vm: GolfViewModel, onRequestPermission: () -> Unit) {
                             },
                             shape = RoundedCornerShape(16.dp),
                             modifier = Modifier.fillMaxHeight()
-                        ) { Text("📏 Medir", maxLines = 1) }
+                        ) { Text(str.measureBtn, maxLines = 1) }
                     }
                 }
             }
@@ -428,7 +435,7 @@ private fun RangeScreen(vm: GolfViewModel, onRequestPermission: () -> Unit) {
                             )
                             if (strokes > 0) {
                                 Text(
-                                    scoreName(strokes - hole.par),
+                                    scoreName(strokes - hole.par, str),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1
@@ -488,7 +495,7 @@ private fun RangeScreen(vm: GolfViewModel, onRequestPermission: () -> Unit) {
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    if (showAllPlayers) "Ocultar jugadores ▴" else "Todos los jugadores ▾",
+                    if (showAllPlayers) str.hidePlayers else str.allPlayers,
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -551,6 +558,7 @@ private fun OverlayFcb(letter: String, value: Int, shadow: Shadow) {
  */
 @Composable
 private fun ShotMeasureCard(vm: GolfViewModel) {
+    val str = LocalStrings.current
     val yards = vm.units == Units.YARDS
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -564,7 +572,7 @@ private fun ShotMeasureCard(vm: GolfViewModel) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(
-                        "📏 GOLPE EN CURSO",
+                        str.shotInProgress,
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -596,12 +604,12 @@ private fun ShotMeasureCard(vm: GolfViewModel) {
                         )
                     }
                     Text(
-                        "$shown ${if (yards) "yd" else "m"} desde la marca",
+                        "$shown ${if (yards) "yd" else "m"} ${str.fromMark}",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Black
                     )
                     Text(
-                        "Camina hasta donde cayó y guarda para afinar el palo.",
+                        str.walkAndSave,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -612,9 +620,9 @@ private fun ShotMeasureCard(vm: GolfViewModel) {
                         enabled = measuredYd in 30..350,
                         onClick = { vm.saveShotToClub() },
                         shape = RoundedCornerShape(14.dp)
-                    ) { Text("Guardar", maxLines = 1) }
+                    ) { Text(str.save, maxLines = 1) }
                     TextButton(onClick = { vm.cancelShot() }) {
-                        Text("Cancelar", color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
+                        Text(str.cancel, color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
                     }
                 }
             }
@@ -697,6 +705,7 @@ private fun StrokeRow(
     putts: Int = 0, onPuttAdd: () -> Unit = {}, onPuttRemove: () -> Unit = {},
     fir: Int = -1, onFirCycle: () -> Unit = {}, showFir: Boolean = false
 ) {
+    val str = LocalStrings.current
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
@@ -709,7 +718,7 @@ private fun StrokeRow(
                     if (strokes > 0) {
                         val diff = strokes - par
                         Text(
-                            scoreName(diff),
+                            scoreName(diff, str),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -804,13 +813,13 @@ private fun StrokeRow(
     }
 }
 
-private fun scoreName(diff: Int): String = when {
+private fun scoreName(diff: Int, str: AppStrings): String = when {
     diff <= -3 -> "Albatross 🦅"
     diff == -2 -> "Eagle 🦅"
     diff == -1 -> "Birdie 🐦"
     diff == 0 -> "Par"
     diff == 1 -> "Bogey"
-    diff == 2 -> "Doble bogey"
+    diff == 2 -> str.doubleBogey
     else -> "+$diff"
 }
 
@@ -819,6 +828,7 @@ private fun scoreName(diff: Int): String = when {
 
 @Composable
 private fun ScorecardScreen(vm: GolfViewModel) {
+    val str = LocalStrings.current
     var showFinishDialog by remember { mutableStateOf(false) }
     val dateFmt = remember { SimpleDateFormat("MMM d · h:mm a", Locale.US) }
     val context = LocalContext.current
@@ -827,7 +837,7 @@ private fun ScorecardScreen(vm: GolfViewModel) {
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
         item {
             Spacer(Modifier.height(12.dp))
-            Text("📋 Tarjeta", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Text(str.cardTitle, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             Text(
                 "${CourseData.CLUB_NAME} · Par ${CourseData.totalPar}",
                 style = MaterialTheme.typography.bodyMedium,
@@ -879,7 +889,7 @@ private fun ScorecardScreen(vm: GolfViewModel) {
             }
             Spacer(Modifier.height(6.dp))
             Text(
-                "⭕ bajo par · ⬜ sobre par",
+                str.legend,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth(),
@@ -889,7 +899,7 @@ private fun ScorecardScreen(vm: GolfViewModel) {
 
             // ---- Stats de la ronda actual ----
             if (vm.players.any { it.playedHoles() > 0 }) {
-                Text("🎯 Stats de la ronda", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(str.roundStats, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(8.dp))
                 Card(
                     Modifier.fillMaxWidth(),
@@ -924,7 +934,7 @@ private fun ScorecardScreen(vm: GolfViewModel) {
 
             // ---- Juegos: Skins + Match Play ----
             if (vm.players.size >= 2) {
-                Text("🏆 Juegos", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(str.games, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(8.dp))
                 Card(
                     Modifier.fillMaxWidth(),
@@ -941,7 +951,7 @@ private fun ScorecardScreen(vm: GolfViewModel) {
                         )
                         if (skins.all { it == 0 } && pot == 0) {
                             Text(
-                                "Anota los golpes de todos los jugadores en un hoyo y aquí aparecen los skins. Empates se acarrean.",
+                                str.skinsEmpty,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -967,14 +977,14 @@ private fun ScorecardScreen(vm: GolfViewModel) {
                             }
                             if (pot > 0) {
                                 Text(
-                                    "🔥 $pot skin${if (pot == 1) "" else "s"} acarreado${if (pot == 1) "" else "s"} al siguiente hoyo",
+                                    str.carriedSkins(pot),
                                     style = MaterialTheme.typography.bodySmall,
                                     fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.error
                                 )
                             }
                         }
-                        vm.matchPlayStatus()?.let { status ->
+                        vm.matchPlayStatus(vm.language == AppLanguage.EN)?.let { status ->
                             Spacer(Modifier.height(10.dp))
                             Text(
                                 "MATCH PLAY",
@@ -994,7 +1004,7 @@ private fun ScorecardScreen(vm: GolfViewModel) {
                         if (vm.players.any { it.playedHoles() > 0 }) {
                             Spacer(Modifier.height(10.dp))
                             Text(
-                                "STABLEFORD · CON HANDICAP",
+                                str.stablefordTitle,
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1022,8 +1032,7 @@ private fun ScorecardScreen(vm: GolfViewModel) {
                             }
                             if (vm.players.all { it.hcp == 0 }) {
                                 Text(
-                                    "Par neto = 2 pts, birdie 3, bogey 1. Configura el handicap " +
-                                        "de cada jugador en Players para que reparta golpes de ventaja.",
+                                    str.stablefordHint,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -1038,22 +1047,22 @@ private fun ScorecardScreen(vm: GolfViewModel) {
                 onClick = { showFinishDialog = true },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp)
-            ) { Text("🏁 Terminar y guardar ronda") }
+            ) { Text(str.finishBtn) }
 
             Spacer(Modifier.height(8.dp))
             OutlinedButton(
                 onClick = {
                     ScorecardImage.shareIntent(context, vm)?.let {
-                        context.startActivity(Intent.createChooser(it, "Compartir tarjeta"))
+                        context.startActivity(Intent.createChooser(it, str.shareChooser))
                     }
                 },
                 enabled = anyScores,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp)
-            ) { Text("📤 Compartir tarjeta como imagen") }
+            ) { Text(str.shareBtn) }
 
             Spacer(Modifier.height(22.dp))
-            Text("Historial de rondas", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(str.historyTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(8.dp))
             if (vm.history.isEmpty()) {
                 Card(
@@ -1062,7 +1071,7 @@ private fun ScorecardScreen(vm: GolfViewModel) {
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                 ) {
                     Text(
-                        "Aún no hay rondas guardadas. Termina una ronda para verla aquí. 🌱",
+                        str.historyEmpty,
                         Modifier.padding(16.dp),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1079,16 +1088,16 @@ private fun ScorecardScreen(vm: GolfViewModel) {
     if (showFinishDialog) {
         AlertDialog(
             onDismissRequest = { showFinishDialog = false },
-            title = { Text("¿Terminar esta ronda?") },
-            text = { Text("Los golpes se guardarán en tu historial y la tarjeta volverá al hoyo 1.") },
+            title = { Text(str.finishDialogTitle) },
+            text = { Text(str.finishDialogText) },
             confirmButton = {
                 TextButton(onClick = {
                     vm.finishRound()
                     showFinishDialog = false
-                }) { Text("Guardar y reiniciar") }
+                }) { Text(str.saveReset) }
             },
             dismissButton = {
-                TextButton(onClick = { showFinishDialog = false }) { Text("Cancelar") }
+                TextButton(onClick = { showFinishDialog = false }) { Text(str.cancel) }
             }
         )
     }
@@ -1134,6 +1143,7 @@ private fun SummaryChip(p: Player) {
 
 @Composable
 private fun RoundHistoryCard(round: SavedRound, fmt: SimpleDateFormat, onDelete: () -> Unit) {
+    val str = LocalStrings.current
     Card(
         Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -1153,7 +1163,7 @@ private fun RoundHistoryCard(round: SavedRound, fmt: SimpleDateFormat, onDelete:
                         else -> "${e.relative}"
                     }
                     Text(
-                        "${e.name}: ${e.strokes} golpes ($relLabel · ${e.holes}/18 hoyos)",
+                        "${e.name}: ${e.strokes} ${str.strokesWord} ($relLabel · ${e.holes}/18 ${str.holesWord})",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1173,7 +1183,7 @@ private fun RoundHistoryCard(round: SavedRound, fmt: SimpleDateFormat, onDelete:
                 }
             }
             TextButton(onClick = onDelete) {
-                Text("Borrar", color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
+                Text(str.delete, color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
             }
         }
     }
@@ -1181,8 +1191,9 @@ private fun RoundHistoryCard(round: SavedRound, fmt: SimpleDateFormat, onDelete:
 
 @Composable
 private fun HeaderRow(vm: GolfViewModel) {
+    val str = LocalStrings.current
     Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 9.dp)) {
-        Text("Hoyo", Modifier.width(46.dp), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+        Text(str.holeCol, Modifier.width(46.dp), fontWeight = FontWeight.Bold, fontSize = 13.sp)
         Text("Par", Modifier.width(36.dp), fontWeight = FontWeight.Bold, fontSize = 13.sp, textAlign = TextAlign.Center)
         vm.players.forEach { p ->
             Text(
@@ -1312,6 +1323,7 @@ private fun statNames(vm: GolfViewModel): List<String> {
 
 @Composable
 private fun StatsScreen(vm: GolfViewModel) {
+    val str = LocalStrings.current
     val names = statNames(vm)
     var selected by rememberSaveable {
         mutableStateOf(vm.players.getOrNull(vm.activePlayerIndex)?.name ?: "")
@@ -1329,7 +1341,7 @@ private fun StatsScreen(vm: GolfViewModel) {
             Spacer(Modifier.height(12.dp))
             Text("📊 Stats", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             Text(
-                "Tendencias de tus rondas guardadas",
+                str.statsSub,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -1354,8 +1366,7 @@ private fun StatsScreen(vm: GolfViewModel) {
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                 ) {
                     Text(
-                        "Aquí verás promedios, tendencia y tus hoyos más difíciles. " +
-                            "Termina y guarda rondas en el Scorecard para llenarlo. 🌱",
+                        str.statsEmpty,
                         Modifier.padding(16.dp),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1373,14 +1384,14 @@ private fun StatsScreen(vm: GolfViewModel) {
             val firAtt = entries.sumOf { it.firAtt }
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                StatTile("RONDAS", "${entries.size}", Modifier.weight(1f))
-                StatTile("PROMEDIO", if (scores.isNotEmpty()) "%.1f".format(scores.average()) else "—", Modifier.weight(1f))
-                StatTile("MEJOR", if (scores.isNotEmpty()) "${scores.min()}" else "—", Modifier.weight(1f))
+                StatTile(str.tileRounds, "${entries.size}", Modifier.weight(1f))
+                StatTile(str.tileAverage, if (scores.isNotEmpty()) "%.1f".format(scores.average()) else "—", Modifier.weight(1f))
+                StatTile(str.tileBest, if (scores.isNotEmpty()) "${scores.min()}" else "—", Modifier.weight(1f))
             }
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 StatTile(
-                    "PUTTS/RONDA",
+                    str.tilePuttsRound,
                     if (puttRounds.isNotEmpty()) "%.1f".format(puttRounds.map { it.putts }.average()) else "—",
                     Modifier.weight(1f)
                 )
@@ -1390,7 +1401,7 @@ private fun StatsScreen(vm: GolfViewModel) {
             if (scores.isEmpty()) {
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "Promedio y mejor score usan solo rondas completas de 18 hoyos.",
+                    str.fullRoundsNote,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -1419,15 +1430,13 @@ private fun StatsScreen(vm: GolfViewModel) {
                             color = MaterialTheme.colorScheme.primary
                         )
                         Text(
-                            "Con ${full.size} ronda${if (full.size == 1) "" else "s"} completa${if (full.size == 1) "" else "s"} · " +
-                                "mejores diferenciales de las últimas 20 · " +
-                                "rating ${CourseData.COURSE_RATING} / slope ${CourseData.SLOPE_RATING}",
+str.hcpDetail(full.size),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     } else {
                         Text(
-                            "Se calcula con al menos 3 rondas completas de 18 hoyos — llevas ${full.size}.",
+                            str.hcpNeed(full.size),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -1439,9 +1448,9 @@ private fun StatsScreen(vm: GolfViewModel) {
             // ---- Tendencia: últimas rondas completas (izquierda = más vieja) ----
             val trend = full.take(10).reversed()
             if (trend.size >= 2) {
-                Text("Tendencia", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(str.trendTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(
-                    "Últimas ${trend.size} rondas de 18 hoyos · barra más baja = mejor score",
+                    str.trendSub(trend.size),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -1488,18 +1497,17 @@ private fun StatsScreen(vm: GolfViewModel) {
 
             // ---- Promedio por hoyo: dónde pierdes golpes ----
             val holed = full.filter { it.holeStrokes.size == 18 }
-            Text("Promedio por hoyo", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(str.perHoleTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             if (holed.isEmpty()) {
                 Text(
-                    "Se llena con tus próximas rondas guardadas (las rondas viejas no " +
-                        "guardaron el detalle hoyo por hoyo).",
+                    str.perHoleEmpty,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.height(24.dp))
             } else {
                 Text(
-                    "🔥 = tus 3 hoyos más caros vs par (${holed.size} ronda${if (holed.size == 1) "" else "s"})",
+                    str.worstNote(holed.size),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -1594,11 +1602,12 @@ private fun StatTile(label: String, value: String, modifier: Modifier = Modifier
 
 @Composable
 private fun PlayersScreen(vm: GolfViewModel) {
+    val str = LocalStrings.current
     LazyColumn(Modifier.fillMaxSize().padding(16.dp)) {
         item {
-            Text("🏌️ Jugadores", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Text(str.playersTitle, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             Text(
-                "Hasta 5 jugadores por ronda",
+                str.playersSub,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -1619,13 +1628,13 @@ private fun PlayersScreen(vm: GolfViewModel) {
                                 name = it.take(14)
                                 vm.renamePlayer(i, name)
                             },
-                            label = { Text("Jugador ${i + 1}") },
+                            label = { Text(str.playerLabel(i + 1)) },
                             singleLine = true,
                             modifier = Modifier.weight(1f)
                         )
                         if (vm.players.size > 1) {
                             TextButton(onClick = { vm.removePlayer(i) }) {
-                                Text("Quitar", color = MaterialTheme.colorScheme.error)
+                                Text(str.remove, color = MaterialTheme.colorScheme.error)
                             }
                         }
                     }
@@ -1663,7 +1672,7 @@ private fun PlayersScreen(vm: GolfViewModel) {
                         Spacer(Modifier.weight(1f))
                         vm.handicapIndex(player.name)?.let { idx ->
                             Text(
-                                "índice $idx",
+                                str.indexLabel(idx),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.primary,
                                 fontWeight = FontWeight.Bold
@@ -1680,10 +1689,10 @@ private fun PlayersScreen(vm: GolfViewModel) {
                     onClick = { vm.addPlayer() },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp)
-                ) { Text("＋ Agregar jugador") }
+                ) { Text(str.addPlayer) }
             } else {
                 Text(
-                    "Máximo de 5 jugadores alcanzado",
+                    str.maxPlayers,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.fillMaxWidth(),
                     textAlign = TextAlign.Center
@@ -1697,48 +1706,56 @@ private fun PlayersScreen(vm: GolfViewModel) {
 
 @Composable
 private fun SettingsScreen(vm: GolfViewModel) {
+    val str = LocalStrings.current
     var showResetDialog by remember { mutableStateOf(false) }
 
     LazyColumn(Modifier.fillMaxSize().padding(16.dp)) {
         item {
-            Text("⚙️ Ajustes", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Text(str.settingsTitle, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(18.dp))
 
-            Text("Unidades", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(str.languageTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ChoiceButton("Yardas", vm.units == Units.YARDS) { vm.setUnitsAndSave(Units.YARDS) }
-                ChoiceButton("Metros", vm.units == Units.METERS) { vm.setUnitsAndSave(Units.METERS) }
+                ChoiceButton("Español", vm.language == AppLanguage.ES) { vm.setLanguageAndSave(AppLanguage.ES) }
+                ChoiceButton("English", vm.language == AppLanguage.EN) { vm.setLanguageAndSave(AppLanguage.EN) }
             }
 
             Spacer(Modifier.height(22.dp))
-            Text("Tema", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(str.unitsTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ChoiceButton("Sistema", vm.themeMode == ThemeMode.SYSTEM) { vm.setThemeAndSave(ThemeMode.SYSTEM) }
-                ChoiceButton("Claro", vm.themeMode == ThemeMode.LIGHT) { vm.setThemeAndSave(ThemeMode.LIGHT) }
-                ChoiceButton("Oscuro", vm.themeMode == ThemeMode.DARK) { vm.setThemeAndSave(ThemeMode.DARK) }
+                ChoiceButton(str.yards, vm.units == Units.YARDS) { vm.setUnitsAndSave(Units.YARDS) }
+                ChoiceButton(str.meters, vm.units == Units.METERS) { vm.setUnitsAndSave(Units.METERS) }
             }
 
             Spacer(Modifier.height(22.dp))
-            Text("Elevación (\"juega como\")", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(str.themeTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ChoiceButton(str.themeSystem, vm.themeMode == ThemeMode.SYSTEM) { vm.setThemeAndSave(ThemeMode.SYSTEM) }
+                ChoiceButton(str.themeLight, vm.themeMode == ThemeMode.LIGHT) { vm.setThemeAndSave(ThemeMode.LIGHT) }
+                ChoiceButton(str.themeDark, vm.themeMode == ThemeMode.DARK) { vm.setThemeAndSave(ThemeMode.DARK) }
+            }
+
+            Spacer(Modifier.height(22.dp))
+            Text(str.elevTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Text(
-                "La app aprende la elevación de cada green cuando lo pisas con el GPS activo. " +
-                "Después de una ronda, las distancias se ajustan solas en tiros cuesta arriba/abajo.",
+                str.elevDesc,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Pill(
-                    "${vm.calibratedGreens}/18 greens calibrados",
+                    str.calibrated(vm.calibratedGreens),
                     MaterialTheme.colorScheme.primaryContainer,
                     MaterialTheme.colorScheme.onPrimaryContainer
                 )
                 Spacer(Modifier.width(10.dp))
                 if (vm.calibratedGreens > 0) {
                     Text(
-                        "✕ borrar",
+                        str.resetSmall,
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.clickable { vm.resetElevations() }
@@ -1747,9 +1764,9 @@ private fun SettingsScreen(vm: GolfViewModel) {
             }
 
             Spacer(Modifier.height(22.dp))
-            Text("Distancias de palos (yd)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(str.clubsTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Text(
-                "Se usan para el palo sugerido, por jugador",
+                str.clubsDesc,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -1800,7 +1817,7 @@ private fun SettingsScreen(vm: GolfViewModel) {
                         }
                     }
                     TextButton(onClick = { vm.resetClubs(vm.activePlayerIndex) }) {
-                        Text("Restablecer valores")
+                        Text(str.resetDefaults)
                     }
                 }
             }
@@ -1809,7 +1826,7 @@ private fun SettingsScreen(vm: GolfViewModel) {
             AccountSection(vm)
 
             Spacer(Modifier.height(22.dp))
-            Text("Ronda", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(str.roundTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(8.dp))
             Button(
                 onClick = { showResetDialog = true },
@@ -1818,7 +1835,7 @@ private fun SettingsScreen(vm: GolfViewModel) {
                     containerColor = MaterialTheme.colorScheme.error,
                     contentColor = MaterialTheme.colorScheme.onError
                 )
-            ) { Text("Borrar golpes (sin guardar)") }
+            ) { Text(str.clearStrokes) }
 
             Spacer(Modifier.height(28.dp))
             Divider()
@@ -1829,9 +1846,7 @@ private fun SettingsScreen(vm: GolfViewModel) {
                 color = MaterialTheme.colorScheme.primary
             )
             Text(
-                "${CourseData.CITY} · 18 hoyos · Par ${CourseData.totalPar}\n" +
-                "La pantalla se mantiene encendida durante la ronda.\n" +
-                "Distancias medidas por GPS (Haversine) al centro del green.",
+str.aboutText,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -1841,16 +1856,16 @@ private fun SettingsScreen(vm: GolfViewModel) {
     if (showResetDialog) {
         AlertDialog(
             onDismissRequest = { showResetDialog = false },
-            title = { Text("¿Borrar todos los golpes?") },
-            text = { Text("Esto borra la tarjeta actual de todos los jugadores sin guardarla en el historial.") },
+            title = { Text(str.clearDialogTitle) },
+            text = { Text(str.clearDialogText) },
             confirmButton = {
                 TextButton(onClick = {
                     vm.clearStrokes()
                     showResetDialog = false
-                }) { Text("Sí, borrar", color = MaterialTheme.colorScheme.error) }
+                }) { Text(str.yesClear, color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
-                TextButton(onClick = { showResetDialog = false }) { Text("Cancelar") }
+                TextButton(onClick = { showResetDialog = false }) { Text(str.cancel) }
             }
         )
     }

@@ -81,7 +81,11 @@ object ScorecardImage {
         c.drawRect(0f, 0f, W.toFloat(), titleH, paint(1f, GREEN, false).apply { style = Paint.Style.FILL })
         c.drawText("⛳ SF Golf GPS", PAD, 74f, paint(52f, WHITE, true))
         c.drawText(CourseData.CLUB_NAME + " · Par ${CourseData.totalPar}", PAD, 116f, paint(30f, WHITE, false))
-        val fecha = SimpleDateFormat("EEEE d 'de' MMMM, yyyy · h:mm a", Locale("es", "MX")).format(Date())
+        val en = vm.language == AppLanguage.EN
+        val fecha = if (en)
+            SimpleDateFormat("EEEE, MMMM d, yyyy · h:mm a", Locale.US).format(Date())
+        else
+            SimpleDateFormat("EEEE d 'de' MMMM, yyyy · h:mm a", Locale("es", "MX")).format(Date())
         c.drawText(fecha.replaceFirstChar { it.uppercase() }, PAD, 150f, paint(26f, 0xFFCDE4D6.toInt(), false))
 
         var y = titleH + gap
@@ -91,7 +95,7 @@ object ScorecardImage {
         y += gap
 
         // ---- Resumen por jugador ----
-        c.drawText("Resumen", PAD, y + 36f, paint(34f, GREEN, true))
+        c.drawText(if (en) "Summary" else "Resumen", PAD, y + 36f, paint(34f, GREEN, true))
         y += footHeadH
         players.forEach { p ->
             drawSummary(c, p, y)
