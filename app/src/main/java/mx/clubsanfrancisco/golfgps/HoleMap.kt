@@ -77,9 +77,24 @@ private data class HoleArt(
     val aspect: Float
 )
 
-private val holeArt: Map<Int, HoleArt> = mapOf(
-    1 to HoleArt(R.drawable.hole_1, Offset(0.526f, 0.884f), Offset(0.420f, 0.143f), 1000f / 890f)
-)
+// Hoyos 2-18: ilustraciones trazadas sobre las fotos satelitales de
+// arte-referencia/ (mismo lienzo 1000x890). En esas referencias el tee
+// quedó siempre en el pixel (500,788) y el green en (500,128), así que
+// los anclajes son iguales para todos.
+private val REF_TEE = Offset(0.500f, 0.8854f)
+private val REF_GREEN = Offset(0.500f, 0.1438f)
+private const val REF_ASPECT = 1000f / 890f
+
+private val holeArt: Map<Int, HoleArt> = buildMap {
+    put(1, HoleArt(R.drawable.hole_1, Offset(0.526f, 0.884f), Offset(0.420f, 0.143f), REF_ASPECT))
+    listOf(
+        R.drawable.hole_2, R.drawable.hole_3, R.drawable.hole_4, R.drawable.hole_5,
+        R.drawable.hole_6, R.drawable.hole_7, R.drawable.hole_8, R.drawable.hole_9,
+        R.drawable.hole_10, R.drawable.hole_11, R.drawable.hole_12, R.drawable.hole_13,
+        R.drawable.hole_14, R.drawable.hole_15, R.drawable.hole_16, R.drawable.hole_17,
+        R.drawable.hole_18,
+    ).forEachIndexed { i, id -> put(i + 2, HoleArt(id, REF_TEE, REF_GREEN, REF_ASPECT)) }
+}
 
 @Composable
 fun HoleMapCard(hole: Hole, userLat: Double?, userLng: Double?, units: Units, flag: Int = -1) {
