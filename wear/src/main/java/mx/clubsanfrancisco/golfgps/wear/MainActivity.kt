@@ -83,13 +83,6 @@ class WPlayer(name0: String) {
     val clubs = mutableStateListOf<Int>().apply { addAll(defaultClubYards) }
 }
 
-// Colores por resultado — SOLO se usan en el scorecard.
-private fun scoreColor(diff: Int): Color = when {
-    diff <= -2 -> Color(0xFFF0912B)   // eagle o mejor
-    diff == -1 -> Color(0xFF4DA3FF)   // birdie
-    diff == 0 -> Color(0xFFF3B61F)    // par
-    else -> Color.White               // bogey+
-}
 
 class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
 
@@ -560,7 +553,7 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                         Text(
                             if (s > 0) "$s" else "–",
                             fontSize = 15.sp, fontWeight = FontWeight.Bold,
-                            color = if (s > 0) scoreColor(s - h.par) else Dim
+                            color = if (s > 0) Color.White else Dim
                         )
                     }
                 }

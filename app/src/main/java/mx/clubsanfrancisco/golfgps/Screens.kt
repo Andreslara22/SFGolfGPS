@@ -728,18 +728,6 @@ private fun scoreName(diff: Int): String = when {
     else -> "+$diff"
 }
 
-// Colores por resultado: eagle+ naranja · birdie azul · par dorado · bogey+ blanco.
-private val ScoreEagle = Color(0xFFF0912B)
-private val ScoreBirdie = Color(0xFF4DA3FF)
-private val ScorePar = Color(0xFFF3B61F)
-private val ScoreBogey = Color(0xFFFFFFFF)
-
-private fun scoreColor(diff: Int): Color = when {
-    diff <= -2 -> ScoreEagle
-    diff == -1 -> ScoreBirdie
-    diff == 0 -> ScorePar
-    else -> ScoreBogey
-}
 
 // ---------------------------------------------------------------- Scorecard
 
@@ -1042,7 +1030,7 @@ private fun SummaryChip(p: Player) {
                     relLabel,
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
-                    color = if (p.playedHoles() > 0) scoreColor(rel.coerceIn(-1, 1))
+                    color = if (p.playedHoles() > 0) MaterialTheme.colorScheme.onSurface
                             else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 2.dp)
                 )
@@ -1177,7 +1165,7 @@ private fun ScoreCell(strokes: Int, par: Int) {
             strokes.toString(),
             fontWeight = FontWeight.Bold,
             fontSize = 14.sp,
-            color = scoreColor(diff)
+            color = MaterialTheme.colorScheme.onSurface
         )
     }
 }
@@ -1186,9 +1174,10 @@ private fun ScoreCell(strokes: Int, par: Int) {
 private fun TotalsRow(vm: GolfViewModel, label: String, range: IntRange, bold: Boolean = false) {
     val parSum = range.sumOf { CourseData.holes[it].par }
     Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp)) {
-        Text(label, Modifier.width(46.dp), fontWeight = FontWeight.Bold, fontSize = 13.sp)
-        Text(parSum.toString(), Modifier.width(36.dp), textAlign = TextAlign.Center,
-            fontWeight = FontWeight.Bold, fontSize = 13.sp)
+        Text(label, Modifier.width(52.dp), fontWeight = FontWeight.Bold, fontSize = 12.sp,
+            maxLines = 1)
+        Text(parSum.toString(), Modifier.width(30.dp), textAlign = TextAlign.Center,
+            fontWeight = FontWeight.Bold, fontSize = 12.sp)
         vm.players.forEach { p ->
             val sum = range.sumOf { p.strokes[it] }
             Text(
@@ -1218,7 +1207,7 @@ private fun RelativeRow(vm: GolfViewModel) {
                 Modifier.weight(1f),
                 textAlign = TextAlign.Center,
                 fontWeight = FontWeight.Black,
-                color = if (p.playedHoles() > 0) scoreColor(rel.coerceIn(-1, 1))
+                color = if (p.playedHoles() > 0) MaterialTheme.colorScheme.onSurface
                         else MaterialTheme.colorScheme.onSurfaceVariant
             )
         }

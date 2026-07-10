@@ -85,17 +85,6 @@ extension ThemeMode {
     }
 }
 
-// Colores por resultado: eagle+ naranja · birdie azul · par dorado · bogey+ blanco/tinta.
-// En tema claro el "blanco" de bogey no se ve: cae a onSurface.
-func scoreColor(_ diff: Int, _ pal: Pal, _ scheme: ColorScheme) -> Color {
-    switch diff {
-    case ...(-2): return Color(argb: 0xFFF0912B)
-    case -1: return Color(argb: 0xFF4DA3FF)
-    case 0: return scheme == .dark ? Color(argb: 0xFFF3B61F) : Color(argb: 0xFFB8860B)
-    default: return scheme == .dark ? .white : pal.onSurface
-    }
-}
-
 func scoreName(_ diff: Int) -> String {
     switch diff {
     case ...(-3): return "Albatross 🦅"

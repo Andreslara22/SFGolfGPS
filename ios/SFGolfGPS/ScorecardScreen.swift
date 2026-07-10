@@ -289,8 +289,7 @@ struct SummaryChip: View {
                 Text(relLabel)
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(player.playedHoles() > 0
-                                     ? scoreColor(min(max(rel, -1), 1), pal, scheme)
-                                     : pal.onSurfaceVariant)
+                                     ? pal.onSurface : pal.onSurfaceVariant)
                     .padding(.bottom, 2)
                 Text("\(player.playedHoles())/18")
                     .font(.system(size: 12))
@@ -418,7 +417,7 @@ struct ScoreCell: View {
             let frame: Color = diff < 0 ? pal.primary : (diff > 0 ? pal.error : .clear)
             Text("\(strokes)")
                 .font(.system(size: 14, weight: .bold))
-                .foregroundColor(scoreColor(diff, pal, scheme))
+                .foregroundColor(pal.onSurface)
                 .frame(width: 27, height: 27)
                 .overlay(
                     Group {
@@ -445,11 +444,13 @@ struct TotalsRow: View {
         let parSum = range.reduce(0) { $0 + CourseData.holes[$1].par }
         HStack(spacing: 0) {
             Text(label)
-                .font(.system(size: 13, weight: .bold))
-                .frame(width: 46, alignment: .leading)
+                .font(.system(size: 12, weight: .bold))
+                .lineLimit(1)
+                .fixedSize()
+                .frame(width: 52, alignment: .leading)
             Text("\(parSum)")
-                .font(.system(size: 13, weight: .bold))
-                .frame(width: 36)
+                .font(.system(size: 12, weight: .bold))
+                .frame(width: 30)
             ForEach(model.players) { p in
                 let sum = range.reduce(0) { $0 + p.strokes[$1] }
                 Text(sum > 0 ? "\(sum)" : "·")
@@ -484,8 +485,7 @@ struct RelativeRow: View {
                 Text(label)
                     .font(.system(size: 15, weight: .black))
                     .foregroundColor(p.playedHoles() > 0
-                                     ? scoreColor(min(max(rel, -1), 1), pal, scheme)
-                                     : pal.onSurfaceVariant)
+                                     ? pal.onSurface : pal.onSurfaceVariant)
                     .frame(maxWidth: .infinity)
             }
         }

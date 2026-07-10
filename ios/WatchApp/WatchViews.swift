@@ -4,16 +4,6 @@ private let mint = Color(argb: 0xFF7ADFA8)
 private let dim = Color(argb: 0xFF9BB8A8)
 private let amber = Color(argb: 0xFFF3B61F)
 
-// Colores por resultado — SOLO se usan en el scorecard.
-private func wScoreColor(_ diff: Int) -> Color {
-    switch diff {
-    case ...(-2): return Color(argb: 0xFFF0912B)   // eagle o mejor
-    case -1: return Color(argb: 0xFF4DA3FF)        // birdie
-    case 0: return Color(argb: 0xFFF3B61F)         // par
-    default: return .white                          // bogey+
-    }
-}
-
 /// Raíz del reloj: página principal arriba, scorecard con swipe vertical
 /// (equivalente al swipe-up del módulo Wear OS).
 struct WatchRootView: View {
@@ -177,7 +167,7 @@ struct WatchScorecardView: View {
                         Spacer()
                         Text(s > 0 ? "\(s)" : "–")
                             .font(.system(size: 15, weight: .bold))
-                            .foregroundColor(s > 0 ? wScoreColor(s - h.par) : dim)
+                            .foregroundColor(s > 0 ? .white : dim)
                     }
                     .padding(.horizontal, 6)
                 }
