@@ -5,12 +5,12 @@ plugins {
 
 android {
     namespace = "mx.clubsanfrancisco.golfgps"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "mx.clubsanfrancisco.golfgps"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0"
     }
@@ -24,11 +24,21 @@ android {
             keyAlias = "sfgolf"
             keyPassword = "android"
         }
+        // Llave de SUBIDA (upload key) para Google Play. Con Play App Signing,
+        // Google guarda la llave real de firma; esta solo firma lo que subes,
+        // así que puede vivir en el repo del club sin comprometer las descargas.
+        create("release") {
+            storeFile = rootProject.file("signing/sfgolf-upload.jks")
+            storePassword = "sanfrancisco2026"
+            keyAlias = "sfgolf-upload"
+            keyPassword = "sanfrancisco2026"
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
         }
     }
     compileOptions {

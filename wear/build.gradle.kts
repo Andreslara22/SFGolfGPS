@@ -5,7 +5,7 @@ plugins {
 
 android {
     namespace = "mx.clubsanfrancisco.golfgps.wear"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "mx.clubsanfrancisco.golfgps"
