@@ -92,7 +92,7 @@ func scoreName(_ diff: Int) -> String {
     case -1: return "Birdie 🐦"
     case 0: return "Par"
     case 1: return "Bogey"
-    case 2: return "Double bogey"
+    case 2: return "Doble bogey"
     default: return "+\(diff)"
     }
 }

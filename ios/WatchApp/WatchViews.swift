@@ -51,7 +51,7 @@ struct WatchMainView: View {
                 VStack(spacing: 0) {
                     HStack(spacing: 6) {
                         Text("‹").font(.system(size: 15)).foregroundColor(dim)
-                        Text("HOLE \(hole.number)")
+                        Text("HOYO \(hole.number)")
                             .font(.system(size: 15, weight: .bold))
                             .foregroundColor(model.auto ? mint : .white)
                         Text("›").font(.system(size: 15)).foregroundColor(dim)
@@ -152,7 +152,7 @@ struct WatchScorecardView: View {
             ? model.players[model.activePlayer] : nil
         ScrollView {
             VStack(spacing: 4) {
-                Text("SCORECARD" + (model.players.count > 1 ? " · ▸ \(p?.name ?? "")" : ""))
+                Text("TARJETA" + (model.players.count > 1 ? " · ▸ \(p?.name ?? "")" : ""))
                     .font(.system(size: 13, weight: .bold))
                     .foregroundColor(amber)
                     .onTapGesture { model.cyclePlayer() }

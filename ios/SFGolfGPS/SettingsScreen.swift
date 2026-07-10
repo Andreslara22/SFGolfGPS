@@ -11,49 +11,49 @@ struct SettingsScreen: View {
         let pal = scheme.pal
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                Text("⚙️ Settings")
+                Text("⚙️ Ajustes")
                     .font(.system(size: 24, weight: .bold))
                     .foregroundColor(pal.onBackground)
                 Spacer().frame(height: 18)
 
-                sectionTitle("Units", pal)
+                sectionTitle("Unidades", pal)
                 Spacer().frame(height: 8)
                 HStack(spacing: 8) {
-                    ChoiceButton(label: "Yards", selected: model.units == .yards) {
+                    ChoiceButton(label: "Yardas", selected: model.units == .yards) {
                         model.setUnitsAndSave(.yards)
                     }
-                    ChoiceButton(label: "Meters", selected: model.units == .meters) {
+                    ChoiceButton(label: "Metros", selected: model.units == .meters) {
                         model.setUnitsAndSave(.meters)
                     }
                 }
 
                 Spacer().frame(height: 22)
-                sectionTitle("Theme", pal)
+                sectionTitle("Tema", pal)
                 Spacer().frame(height: 8)
                 HStack(spacing: 8) {
-                    ChoiceButton(label: "System", selected: model.themeMode == .system) {
+                    ChoiceButton(label: "Sistema", selected: model.themeMode == .system) {
                         model.setThemeAndSave(.system)
                     }
-                    ChoiceButton(label: "Light", selected: model.themeMode == .light) {
+                    ChoiceButton(label: "Claro", selected: model.themeMode == .light) {
                         model.setThemeAndSave(.light)
                     }
-                    ChoiceButton(label: "Dark", selected: model.themeMode == .dark) {
+                    ChoiceButton(label: "Oscuro", selected: model.themeMode == .dark) {
                         model.setThemeAndSave(.dark)
                     }
                 }
 
                 Spacer().frame(height: 22)
-                sectionTitle("Elevation (\"plays like\")", pal)
-                Text("The app learns each green's elevation when you walk onto it with GPS on. After one round, distances adjust automatically for uphill/downhill shots.")
+                sectionTitle("Elevación (\"juega como\")", pal)
+                Text("La app aprende la elevación de cada green cuando lo pisas con el GPS activo. Después de una ronda, las distancias se ajustan solas en tiros cuesta arriba/abajo.")
                     .font(.system(size: 12))
                     .foregroundColor(pal.onSurfaceVariant)
                 Spacer().frame(height: 8)
                 HStack(spacing: 10) {
-                    Pill(text: "\(model.calibratedGreens)/18 greens calibrated",
+                    Pill(text: "\(model.calibratedGreens)/18 greens calibrados",
                          bg: pal.primaryContainer, fg: pal.onPrimaryContainer)
                     if model.calibratedGreens > 0 {
                         Button { model.resetElevations() } label: {
-                            Text("✕ reset")
+                            Text("✕ borrar")
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundColor(pal.error)
                         }
@@ -62,8 +62,8 @@ struct SettingsScreen: View {
                 }
 
                 Spacer().frame(height: 22)
-                sectionTitle("Club distances (yd)", pal)
-                Text("Used for the suggested club, per player")
+                sectionTitle("Distancias de palos (yd)", pal)
+                Text("Se usan para el palo sugerido, por jugador")
                     .font(.system(size: 12))
                     .foregroundColor(pal.onSurfaceVariant)
                 Spacer().frame(height: 8)
@@ -81,10 +81,10 @@ struct SettingsScreen: View {
                 clubsCard(pal)
 
                 Spacer().frame(height: 22)
-                sectionTitle("Round", pal)
+                sectionTitle("Ronda", pal)
                 Spacer().frame(height: 8)
                 Button { showResetDialog = true } label: {
-                    Text("Clear strokes (without saving)")
+                    Text("Borrar golpes (sin guardar)")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(pal.onError)
                         .padding(.horizontal, 18)
@@ -99,7 +99,7 @@ struct SettingsScreen: View {
                 Text("⛳ \(CourseData.clubName)")
                     .font(.system(size: 16, weight: .bold))
                     .foregroundColor(pal.primary)
-                Text("\(CourseData.city) · 18 holes · Par \(CourseData.totalPar)\nScreen stays awake during your round.\nDistances measured by GPS (Haversine) to the center of the green.")
+                Text("\(CourseData.city) · 18 hoyos · Par \(CourseData.totalPar)\nLa pantalla se mantiene encendida durante la ronda.\nDistancias medidas por GPS (Haversine) al centro del green.")
                     .font(.system(size: 12))
                     .foregroundColor(pal.onSurfaceVariant)
                 Spacer().frame(height: 24)
@@ -107,11 +107,11 @@ struct SettingsScreen: View {
             .padding(16)
         }
         .background(pal.background)
-        .alert("Clear all strokes?", isPresented: $showResetDialog) {
-            Button("Yes, clear", role: .destructive) { model.clearStrokes() }
-            Button("Cancel", role: .cancel) {}
+        .alert("¿Borrar todos los golpes?", isPresented: $showResetDialog) {
+            Button("Sí, borrar", role: .destructive) { model.clearStrokes() }
+            Button("Cancelar", role: .cancel) {}
         } message: {
-            Text("This wipes the current scorecard for every player without saving it to history.")
+            Text("Esto borra la tarjeta actual de todos los jugadores sin guardarla en el historial.")
         }
     }
 
@@ -145,7 +145,7 @@ struct SettingsScreen: View {
                 .padding(.vertical, 2)
             }
             Button { model.resetClubs(idx) } label: {
-                Text("Reset to defaults")
+                Text("Restablecer valores")
                     .font(.system(size: 14))
                     .foregroundColor(pal.primary)
                     .padding(.vertical, 10)

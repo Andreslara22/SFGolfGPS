@@ -53,7 +53,7 @@ struct StatsScreen: View {
                 }
 
                 if entries.isEmpty {
-                    Text("Aquí verás promedios, tendencia y tus hoyos más difíciles. Termina y guarda rondas en el Scorecard para llenarlo. 🌱")
+                    Text("Aquí verás promedios, tendencia y tus hoyos más difíciles. Termina y guarda rondas en la Tarjeta para llenarlo. 🌱")
                         .foregroundColor(pal.onSurfaceVariant)
                         .padding(16)
                         .frame(maxWidth: .infinity, alignment: .leading)

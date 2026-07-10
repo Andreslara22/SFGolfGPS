@@ -164,7 +164,7 @@ final class GolfModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     override init() {
         super.init()
         loadState()
-        if players.isEmpty { players.append(Player(name: "Player 1")) }
+        if players.isEmpty { players.append(Player(name: "Jugador 1")) }
         stateTs = Int64(prefs.object(forKey: "stateTs") as? Double ?? 0)
 
         locationManager.delegate = self
@@ -571,7 +571,7 @@ final class GolfModel: NSObject, ObservableObject, CLLocationManagerDelegate {
 
     func addPlayer() {
         if players.count < 5 {
-            players.append(Player(name: "Player \(players.count + 1)"))
+            players.append(Player(name: "Jugador \(players.count + 1)"))
             syncOut()
         }
     }

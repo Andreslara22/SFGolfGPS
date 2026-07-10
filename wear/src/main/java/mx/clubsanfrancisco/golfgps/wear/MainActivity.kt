@@ -425,7 +425,7 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                                 Text("‹", fontSize = 15.sp, color = Dim)
                                 Spacer(Modifier.width(6.dp))
                                 Text(
-                                    "HOLE ${hole.number}",
+                                    "HOYO ${hole.number}",
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = if (auto) Mint else Color.White
@@ -531,7 +531,7 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
             ) {
                 item {
                     Text(
-                        "SCORECARD" + if (wplayers.size > 1) " · ▸ ${p?.name ?: ""}" else "",
+                        "TARJETA" + if (wplayers.size > 1) " · ▸ ${p?.name ?: ""}" else "",
                         fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Amber,
                         modifier = Modifier.clickable { cyclePlayer() }
                     )

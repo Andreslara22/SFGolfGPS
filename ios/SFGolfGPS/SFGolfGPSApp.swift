@@ -21,15 +21,15 @@ struct GolfAppView: View {
         let pal = scheme.pal
         TabView {
             RangeScreen(model: model)
-                .tabItem { Label("Range", systemImage: "flag.circle.fill") }
+                .tabItem { Label("GPS", systemImage: "flag.circle.fill") }
             ScorecardScreen(model: model)
-                .tabItem { Label("Score", systemImage: "list.clipboard.fill") }
+                .tabItem { Label("Tarjeta", systemImage: "list.clipboard.fill") }
             StatsScreen(model: model)
                 .tabItem { Label("Stats", systemImage: "chart.bar.fill") }
             PlayersScreen(model: model)
-                .tabItem { Label("Players", systemImage: "figure.golf") }
+                .tabItem { Label("Jugadores", systemImage: "figure.golf") }
             SettingsScreen(model: model)
-                .tabItem { Label("Settings", systemImage: "gearshape.fill") }
+                .tabItem { Label("Ajustes", systemImage: "gearshape.fill") }
         }
         .tint(pal.primary)
         .background(pal.background)

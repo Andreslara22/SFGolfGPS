@@ -22,7 +22,7 @@ struct ScorecardScreen: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 Spacer().frame(height: 12)
-                Text("📋 Scorecard")
+                Text("📋 Tarjeta")
                     .font(.system(size: 24, weight: .bold))
                     .foregroundColor(pal.onBackground)
                 Text("\(CourseData.clubName) · Par \(CourseData.totalPar)")
@@ -42,7 +42,7 @@ struct ScorecardScreen: View {
 
                 scorecardTable(pal)
                 Spacer().frame(height: 6)
-                Text("⭕ under par · ⬜ over par")
+                Text("⭕ bajo par · ⬜ sobre par")
                     .font(.system(size: 11))
                     .foregroundColor(pal.onSurfaceVariant)
                     .frame(maxWidth: .infinity)
@@ -59,7 +59,7 @@ struct ScorecardScreen: View {
                 }
 
                 Button { showFinishDialog = true } label: {
-                    Text("🏁 Finish round & save")
+                    Text("🏁 Terminar y guardar ronda")
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(pal.onPrimary)
                         .frame(maxWidth: .infinity)
@@ -84,12 +84,12 @@ struct ScorecardScreen: View {
                 .opacity(anyScores ? 1 : 0.5)
 
                 Spacer().frame(height: 22)
-                Text("Round history")
+                Text("Historial de rondas")
                     .font(.system(size: 17, weight: .bold))
                     .foregroundColor(pal.onBackground)
                 Spacer().frame(height: 8)
                 if model.history.isEmpty {
-                    Text("No saved rounds yet. Finish a round to keep it here. 🌱")
+                    Text("Aún no hay rondas guardadas. Termina una ronda para verla aquí. 🌱")
                         .foregroundColor(pal.onSurfaceVariant)
                         .padding(16)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -107,11 +107,11 @@ struct ScorecardScreen: View {
             .padding(.horizontal, 12)
         }
         .background(pal.background)
-        .alert("Finish this round?", isPresented: $showFinishDialog) {
-            Button("Save & reset") { model.finishRound() }
-            Button("Cancel", role: .cancel) {}
+        .alert("¿Terminar esta ronda?", isPresented: $showFinishDialog) {
+            Button("Guardar y reiniciar") { model.finishRound() }
+            Button("Cancelar", role: .cancel) {}
         } message: {
-            Text("Scores will be saved to your history and the scorecard will reset to hole 1.")
+            Text("Los golpes se guardarán en tu historial y la tarjeta volverá al hoyo 1.")
         }
         .sheet(isPresented: Binding(
             get: { shareImage != nil },
@@ -153,7 +153,7 @@ struct ScorecardScreen: View {
 
     @ViewBuilder
     private func roundStats(_ pal: Pal) -> some View {
-        Text("🎯 Round stats")
+        Text("🎯 Stats de la ronda")
             .font(.system(size: 17, weight: .bold))
             .foregroundColor(pal.onBackground)
         Spacer().frame(height: 8)
@@ -184,7 +184,7 @@ struct ScorecardScreen: View {
 
     @ViewBuilder
     private func gamesCard(_ pal: Pal) -> some View {
-        Text("🏆 Games")
+        Text("🏆 Juegos")
             .font(.system(size: 17, weight: .bold))
             .foregroundColor(pal.onBackground)
         Spacer().frame(height: 8)
@@ -338,7 +338,7 @@ struct RoundHistoryCard: View {
             }
             Spacer()
             Button(action: onDelete) {
-                Text("Delete")
+                Text("Borrar")
                     .font(.system(size: 13))
                     .foregroundColor(pal.error)
             }
@@ -356,7 +356,7 @@ struct HeaderRow: View {
     var body: some View {
         let pal = scheme.pal
         HStack(spacing: 0) {
-            Text("Hole").frame(width: 46, alignment: .leading)
+            Text("Hoyo").frame(width: 46, alignment: .leading)
             Text("Par").frame(width: 36)
             ForEach(model.players) { p in
                 Text(p.name.prefix(6))

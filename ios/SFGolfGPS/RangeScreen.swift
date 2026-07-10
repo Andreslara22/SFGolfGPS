@@ -36,7 +36,7 @@ struct RangeScreen: View {
             VStack(alignment: .center, spacing: 0) {
                 Spacer().frame(height: 14)
                 HStack(spacing: 10) {
-                    Text("⛳ HOLE \(hole.number)")
+                    Text("⛳ HOYO \(hole.number)")
                         .font(.system(size: 28, weight: .black))
                         .foregroundColor(pal.primary)
                     Pill(text: "PAR \(hole.par)", bg: pal.primary, fg: pal.onPrimary)
@@ -87,7 +87,7 @@ struct RangeScreen: View {
                     .foregroundColor(pal.onSurfaceVariant)
 
                 Spacer().frame(height: 16)
-                Text("STROKES · HOLE \(hole.number)")
+                Text("GOLPES · HOYO \(hole.number)")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(pal.onBackground)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -133,14 +133,14 @@ struct RangeScreen: View {
     @ViewBuilder
     private func permissionPrompt(_ pal: Pal) -> some View {
         Spacer().frame(height: 24)
-        Text("Location permission is needed to measure your distance to the green.")
+        Text("Se necesita permiso de ubicación para medir tu distancia al green.")
             .multilineTextAlignment(.center)
             .foregroundColor(pal.onSurfaceVariant)
         Spacer().frame(height: 12)
         Button {
             model.requestLocation()
         } label: {
-            Text("Enable GPS")
+            Text("Activar GPS")
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(pal.onPrimary)
                 .padding(.horizontal, 24)
@@ -170,10 +170,10 @@ struct RangeScreen: View {
         }
         Text({
             switch flag {
-            case 0: return "to RED pin (front)"
-            case 1: return "to WHITE pin (middle)"
-            case 2: return "to BLUE pin (back)"
-            default: return "to center of green"
+            case 0: return "al pin ROJO (frente)"
+            case 1: return "al pin BLANCO (medio)"
+            case 2: return "al pin AZUL (fondo)"
+            default: return "al centro del green"
             }
         }())
         .font(.system(size: 17, weight: .semibold))
@@ -184,8 +184,8 @@ struct RangeScreen: View {
             default: return pal.primary
             }
         }())
-        Text(model.gpsAccuracyM.map { "🛰️ GPS accuracy: ±\(Int($0.rounded())) m" }
-             ?? "🛰️ Searching for GPS signal…")
+        Text(model.gpsAccuracyM.map { "🛰️ Precisión GPS: ±\(Int($0.rounded())) m" }
+             ?? "🛰️ Buscando señal GPS…")
             .font(.system(size: 12))
             .foregroundColor(pal.onSurfaceVariant)
 
@@ -196,7 +196,7 @@ struct RangeScreen: View {
             let color = up ? Color(argb: 0xFFE85D4A) : Color(argb: 0xFF5AB0FF)
             Spacer().frame(height: 4)
             HStack(spacing: 0) {
-                Text("PLAYS LIKE ")
+                Text("JUEGA COMO ")
                     .font(.system(size: 12, weight: .bold))
                     .foregroundColor(pal.onSurfaceVariant)
                 Text("\(plV) \(unitShort)")
@@ -232,10 +232,10 @@ struct RangeScreen: View {
             HStack(spacing: 12) {
                 Text("🏌️").font(.system(size: 30))
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("SUGGESTED CLUB · \(activeP.name.uppercased().prefix(12))")
+                    Text("PALO SUGERIDO · \(activeP.name.uppercased().prefix(12))")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(pal.onSurfaceVariant)
-                    Text(clubYards.map { clubForDistance($0, activeP.clubYards) } ?? "Waiting for GPS")
+                    Text(clubYards.map { clubForDistance($0, activeP.clubYards) } ?? "Esperando GPS")
                         .font(.system(size: 24, weight: .bold))
                         .foregroundColor(pal.primary)
                 }
@@ -261,9 +261,9 @@ struct RangeScreen: View {
     @ViewBuilder
     private func holeButtons(_ pal: Pal) -> some View {
         HStack(spacing: 8) {
-            navButton("◀ Prev", pal, highlighted: false) { model.previousHole() }
+            navButton("◀ Ant.", pal, highlighted: false) { model.previousHole() }
             navButton("AUTO", pal, highlighted: model.autoDetect) { model.toggleAutoDetect() }
-            navButton("Next ▶", pal, highlighted: false) { model.nextHole() }
+            navButton("Sig. ▶", pal, highlighted: false) { model.nextHole() }
         }
     }
 

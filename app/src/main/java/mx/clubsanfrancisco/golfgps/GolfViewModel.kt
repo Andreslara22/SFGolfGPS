@@ -191,7 +191,7 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
 
     init {
         loadState()
-        if (players.isEmpty()) players.add(Player("Player 1"))
+        if (players.isEmpty()) players.add(Player("Jugador 1"))
         stateTs = prefs.getLong("stateTs", 0L)
 
         // Sincronización con el reloj (Data Layer): trae el último snapshot.
@@ -304,7 +304,7 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
         history.clear()
         for (i in 0 until 18) flags[i] = -1
         loadState()
-        if (players.isEmpty()) players.add(Player("Player 1"))
+        if (players.isEmpty()) players.add(Player("Jugador 1"))
         if (activePlayerIndex >= players.size) activePlayerIndex = 0
         currentHoleIndex = 0
         syncOut()
@@ -630,7 +630,7 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
     // --- Players ---
     fun addPlayer() {
         if (players.size < 5) {
-            players.add(Player("Player ${players.size + 1}"))
+            players.add(Player("Jugador ${players.size + 1}"))
             syncOut()
         }
     }

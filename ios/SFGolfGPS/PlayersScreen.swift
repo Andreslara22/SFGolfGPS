@@ -10,10 +10,10 @@ struct PlayersScreen: View {
         let pal = scheme.pal
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                Text("🏌️ Players")
+                Text("🏌️ Jugadores")
                     .font(.system(size: 24, weight: .bold))
                     .foregroundColor(pal.onBackground)
-                Text("Up to 5 players per round")
+                Text("Hasta 5 jugadores por ronda")
                     .font(.system(size: 14))
                     .foregroundColor(pal.onSurfaceVariant)
                 Spacer().frame(height: 14)
@@ -27,7 +27,7 @@ struct PlayersScreen: View {
 
                 if model.players.count < 5 {
                     Button { model.addPlayer() } label: {
-                        Text("＋ Add player")
+                        Text("＋ Agregar jugador")
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(pal.onPrimary)
                             .frame(maxWidth: .infinity)
@@ -36,7 +36,7 @@ struct PlayersScreen: View {
                     }
                     .buttonStyle(.plain)
                 } else {
-                    Text("Maximum of 5 players reached")
+                    Text("Máximo de 5 jugadores alcanzado")
                         .foregroundColor(pal.onSurfaceVariant)
                         .frame(maxWidth: .infinity)
                 }
@@ -56,7 +56,7 @@ private struct PlayerCard: View {
         let pal = scheme.pal
         VStack(spacing: 6) {
             HStack {
-                TextField("Player \(index + 1)", text: Binding(
+                TextField("Jugador \(index + 1)", text: Binding(
                     get: { model.players.indices.contains(index) ? model.players[index].name : "" },
                     set: { model.renamePlayer(index, String($0.prefix(14))) }
                 ))
@@ -68,7 +68,7 @@ private struct PlayerCard: View {
 
                 if model.players.count > 1 {
                     Button { model.removePlayer(index) } label: {
-                        Text("Remove")
+                        Text("Quitar")
                             .font(.system(size: 14))
                             .foregroundColor(pal.error)
                     }
@@ -93,7 +93,7 @@ private struct PlayerCard: View {
                 Spacer()
                 if model.players.indices.contains(index),
                    let idx = model.handicapIndex(model.players[index].name) {
-                    Text("index \(String(format: "%.1f", idx))")
+                    Text("índice \(String(format: "%.1f", idx))")
                         .font(.system(size: 12, weight: .bold))
                         .foregroundColor(pal.primary)
                 }
