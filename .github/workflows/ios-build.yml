@@ -45,3 +45,28 @@ jobs:
           name: SFGolfGPS-ipa
           path: SFGolfGPS-sin-firmar.ipa
           retention-days: 30
+
+      # Build para SIMULADOR: este .app se sube a appetize.io y la app corre
+      # en un iPhone virtual dentro del navegador (sin iPhone ni Xcode).
+      - name: Compilar app para simulador
+        run: |
+          xcodebuild -project ios/SFGolfGPS.xcodeproj \
+            -scheme SFGolfGPS \
+            -configuration Release \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build-sim \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build
+
+      - name: Empaquetar build de simulador
+        run: |
+          cd build-sim/Build/Products/Release-iphonesimulator
+          zip -qry "$GITHUB_WORKSPACE/SFGolfGPS-simulador.zip" SFGolfGPS.app
+          ls -lh "$GITHUB_WORKSPACE/SFGolfGPS-simulador.zip"
+
+      - name: Subir build de simulador como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: SFGolfGPS-simulador
+          path: SFGolfGPS-simulador.zip
+          retention-days: 30
