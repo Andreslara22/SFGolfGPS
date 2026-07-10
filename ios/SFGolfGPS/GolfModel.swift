@@ -115,14 +115,17 @@ private let greenEmaAlpha = 0.15
 
 // ---------------------------------------------------------------- Modelo
 
-/// Estado de la app + GPS. Port del GolfViewModel de Android (sin la
-/// sincronización con Wear OS ni el respaldo Firebase; la app iOS es 100%
-/// local, con persistencia en UserDefaults usando las mismas llaves y
-/// formatos serializados que SharedPreferences en Android).
+/// Estado de la app + GPS. Port del GolfViewModel de Android (sin el respaldo
+/// Firebase; la app iOS es 100% local, con persistencia en UserDefaults usando
+/// las mismas llaves y formatos serializados que SharedPreferences en Android).
+/// Sincroniza la ronda con el Apple Watch vía RoundSync (snapshot completo,
+/// last-write-wins por timestamp — igual que el Data Layer en Android).
 final class GolfModel: NSObject, ObservableObject, CLLocationManagerDelegate {
 
     private let prefs = UserDefaults.standard
     private let locationManager = CLLocationManager()
+    private let sync = RoundSync()
+    private var stateTs: Int64 = 0
 
     // --- GPS ---
     @Published private(set) var userLat: Double?
@@ -162,14 +165,89 @@ final class GolfModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         super.init()
         loadState()
         if players.isEmpty { players.append(Player(name: "Player 1")) }
+        stateTs = Int64(prefs.object(forKey: "stateTs") as? Double ?? 0)
 
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
         locationManager.distanceFilter = kCLDistanceFilterNone
         locationManager.activityType = .fitness
+
+        // Sincronización con el reloj: trae el último snapshot y escucha cambios.
+        sync.onReceive = { [weak self] dict in self?.applyIncoming(dict) }
+        sync.activate()
     }
 
     var currentHole: Hole { CourseData.holes[currentHoleIndex] }
+
+    // --- Sincronización con el reloj (snapshot completo de la ronda) ---
+
+    /// Marca cambio local, guarda y publica el estado al reloj.
+    private func syncOut() {
+        stateTs = nowMillis()
+        saveState()
+        pushState()
+    }
+
+    /// Publica el estado actual (nombres, golpes, activo, hoyo, unidades…).
+    private func pushState() {
+        sync.push([
+            SyncKeys.names: players.map(\.name).joined(separator: SyncKeys.sep),
+            SyncKeys.scores: players.map { $0.strokes.map(String.init).joined(separator: ",") }
+                .joined(separator: SyncKeys.sep),
+            SyncKeys.active: activePlayerIndex,
+            SyncKeys.hole: currentHoleIndex,
+            SyncKeys.units: units.rawValue,
+            SyncKeys.auto: autoDetect,
+            SyncKeys.flags: flags.map(String.init).joined(separator: ","),
+            SyncKeys.clubs: players.map { $0.clubYards.map(String.init).joined(separator: ",") }
+                .joined(separator: SyncKeys.sep),
+            SyncKeys.hcps: players.map { String($0.hcp) }.joined(separator: ","),
+            SyncKeys.ts: stateTs
+        ])
+    }
+
+    /// Aplica un snapshot entrante si es más nuevo (last-write-wins).
+    private func applyIncoming(_ dict: [String: Any]) {
+        let ts = (dict[SyncKeys.ts] as? NSNumber)?.int64Value ?? 0
+        if ts <= stateTs { return }
+        guard let scoresStr = dict[SyncKeys.scores] as? String else { return }
+        // Actualiza golpes y yardas de palos de los jugadores existentes
+        // (el reloj no agrega ni quita jugadores en el teléfono).
+        let scores = scoresStr.components(separatedBy: SyncKeys.sep)
+        let clubsIn = (dict[SyncKeys.clubs] as? String)?.components(separatedBy: SyncKeys.sep)
+        for i in players.indices {
+            if i < scores.count {
+                let list = scores[i].split(separator: ",").compactMap { Int($0) }
+                if list.count == 18 { players[i].strokes = list }
+            }
+            if let clubsIn, i < clubsIn.count {
+                let list = clubsIn[i].split(separator: ",").compactMap { Int($0) }
+                if list.count == clubNames.count { players[i].clubYards = list }
+            }
+        }
+        if let a = dict[SyncKeys.active] as? Int, players.indices.contains(a) {
+            activePlayerIndex = a
+        }
+        if let h = dict[SyncKeys.hole] as? Int, (0..<18).contains(h) {
+            currentHoleIndex = h
+        }
+        if let u = dict[SyncKeys.units] as? String, let parsed = Units(rawValue: u) {
+            units = parsed
+        }
+        if let auto = dict[SyncKeys.auto] as? Bool { autoDetect = auto }
+        if let f = (dict[SyncKeys.flags] as? String)?
+            .split(separator: ",", omittingEmptySubsequences: false).compactMap({ Int($0) }),
+           f.count == 18 {
+            flags = f
+        }
+        if let hcps = (dict[SyncKeys.hcps] as? String)?.split(separator: ",").compactMap({ Int($0) }) {
+            for (i, v) in hcps.enumerated() where players.indices.contains(i) {
+                players[i].hcp = min(max(v, 0), 40)
+            }
+        }
+        stateTs = ts
+        saveState()
+    }
 
     // --- Permiso y updates de ubicación ---
 
@@ -224,7 +302,7 @@ final class GolfModel: NSObject, ObservableObject, CLLocationManagerDelegate {
             // cuando andas lejos del campo.
             if dist <= autoDetectRadiusM && currentHoleIndex != nearest.number - 1 {
                 currentHoleIndex = nearest.number - 1
-                saveState()
+                syncOut()
             }
         }
     }
@@ -316,7 +394,7 @@ final class GolfModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         players[activePlayerIndex].clubYards[idx] =
             min(max(Int((Double(old) * 0.7 + Double(yd) * 0.3).rounded()), 30), 350)
         cancelShot()
-        saveState()
+        syncOut()
         return yd
     }
 
@@ -374,13 +452,13 @@ final class GolfModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     func nextHole() {
         autoDetect = false
         currentHoleIndex = (currentHoleIndex + 1) % 18
-        saveState()
+        syncOut()
     }
 
     func previousHole() {
         autoDetect = false
         currentHoleIndex = (currentHoleIndex + 17) % 18
-        saveState()
+        syncOut()
     }
 
     func toggleAutoDetect() {
@@ -390,7 +468,7 @@ final class GolfModel: NSObject, ObservableObject, CLLocationManagerDelegate {
             let dist = haversineMeters(lat, lng, nearest.teeLat, nearest.teeLng)
             if dist <= autoDetectRadiusM { currentHoleIndex = nearest.number - 1 }
         }
-        saveState()
+        syncOut()
     }
 
     // --- Golpes ---
@@ -399,20 +477,20 @@ final class GolfModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         let h = holeIdx ?? currentHoleIndex
         guard players.indices.contains(playerIdx) else { return }
         if players[playerIdx].strokes[h] < 15 { players[playerIdx].strokes[h] += 1 }
-        saveState()
+        syncOut()
     }
 
     func removeStroke(_ playerIdx: Int, holeIdx: Int? = nil) {
         let h = holeIdx ?? currentHoleIndex
         guard players.indices.contains(playerIdx) else { return }
         if players[playerIdx].strokes[h] > 0 { players[playerIdx].strokes[h] -= 1 }
-        saveState()
+        syncOut()
     }
 
     func setActivePlayer(_ index: Int) {
         if players.indices.contains(index) && index != activePlayerIndex {
             activePlayerIndex = index
-            saveState()
+            syncOut()
         }
     }
 
@@ -494,7 +572,7 @@ final class GolfModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     func addPlayer() {
         if players.count < 5 {
             players.append(Player(name: "Player \(players.count + 1)"))
-            saveState()
+            syncOut()
         }
     }
 
@@ -502,7 +580,7 @@ final class GolfModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         if players.count > 1 && players.indices.contains(index) {
             players.remove(at: index)
             if activePlayerIndex >= players.count { activePlayerIndex = players.count - 1 }
-            saveState()
+            syncOut()
         }
     }
 
@@ -510,39 +588,39 @@ final class GolfModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         for i in 0..<18 {
             flags[i] = (((color + (i - holeIdx)) % 3) + 3) % 3
         }
-        saveState()
+        syncOut()
     }
 
     func clearFlags() {
         flags = [Int](repeating: -1, count: 18)
-        saveState()
+        syncOut()
     }
 
     func adjustClub(_ playerIdx: Int, _ clubIdx: Int, _ delta: Int) {
         guard players.indices.contains(playerIdx), clubNames.indices.contains(clubIdx) else { return }
         players[playerIdx].clubYards[clubIdx] =
             min(max(players[playerIdx].clubYards[clubIdx] + delta, 30), 350)
-        saveState()
+        syncOut()
     }
 
     func resetClubs(_ playerIdx: Int) {
         guard players.indices.contains(playerIdx) else { return }
         players[playerIdx].clubYards = defaultClubYards
-        saveState()
+        syncOut()
     }
 
     func renamePlayer(_ index: Int, _ newName: String) {
         let trimmed = newName.trimmingCharacters(in: .whitespaces)
         guard players.indices.contains(index), !trimmed.isEmpty else { return }
         players[index].name = String(trimmed.prefix(14))
-        saveState()
+        syncOut()
     }
 
     /// Ajusta el handicap de juego de un jugador (para Stableford).
     func adjustHandicap(_ index: Int, _ delta: Int) {
         guard players.indices.contains(index) else { return }
         players[index].hcp = min(max(players[index].hcp + delta, 0), 40)
-        saveState()
+        syncOut()
     }
 
     /// Guarda la ronda actual al historial (si hay golpes) y arranca de cero en el hoyo 1.
@@ -570,7 +648,7 @@ final class GolfModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         flags = [Int](repeating: -1, count: 18)
         currentHoleIndex = 0
         autoDetect = false
-        saveState()
+        syncOut()
     }
 
     /// Limpia los golpes actuales sin guardar al historial.
@@ -582,7 +660,7 @@ final class GolfModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         }
         flags = [Int](repeating: -1, count: 18)
         currentHoleIndex = 0
-        saveState()
+        syncOut()
     }
 
     func deleteRound(_ index: Int) {
@@ -592,7 +670,7 @@ final class GolfModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         }
     }
 
-    func setUnitsAndSave(_ u: Units) { units = u; saveState() }
+    func setUnitsAndSave(_ u: Units) { units = u; syncOut() }
     func setThemeAndSave(_ t: ThemeMode) { themeMode = t; saveState() }
 
     // --- Persistencia ---
@@ -630,6 +708,7 @@ final class GolfModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         prefs.set(units.rawValue, forKey: "units")
         prefs.set(themeMode.rawValue, forKey: "theme")
         prefs.set(historyStr, forKey: "history")
+        prefs.set(Double(stateTs), forKey: "stateTs")
     }
 
     private func loadState() {

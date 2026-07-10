@@ -1,18 +1,6 @@
 import SwiftUI
 
-enum Units: String { case yards = "YARDS", meters = "METERS" }
 enum ThemeMode: String { case system = "SYSTEM", light = "LIGHT", dark = "DARK" }
-
-extension Color {
-    /// Color desde 0xAARRGGBB (mismo formato que Compose).
-    init(argb: UInt32) {
-        let a = Double((argb >> 24) & 0xFF) / 255
-        let r = Double((argb >> 16) & 0xFF) / 255
-        let g = Double((argb >> 8) & 0xFF) / 255
-        let b = Double(argb & 0xFF) / 255
-        self.init(.sRGB, red: r, green: g, blue: b, opacity: a)
-    }
-}
 
 /// Paleta "Fairway" — verdes profundos, alto contraste para luz solar directa.
 /// Mismos roles y valores que Theme.kt (Material 3).

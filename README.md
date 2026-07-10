@@ -42,17 +42,40 @@ la tarjeta como PNG. Los datos del campo (`CourseData.swift`) son espejo de
 `CourseData.kt`: si afinas una coordenada en uno, cópiala al otro.
 
 1. En una Mac con **Xcode 16 o más reciente**, abre `ios/SFGolfGPS.xcodeproj`.
-2. En *Signing & Capabilities* selecciona tu **Team** (basta una cuenta de
-   Apple ID gratuita para instalar en tu propio iPhone).
+2. En *Signing & Capabilities* selecciona tu **Team** en ambos targets —
+   `SFGolfGPS` y `SFGolfGPS Watch App` (basta una cuenta de Apple ID gratuita
+   para instalar en tu propio iPhone).
 3. Conecta el iPhone, elígelo como destino y presiona **Run** (⌘R).
 4. Al abrirla, acepta el permiso de **ubicación mientras usas la app**.
 5. Para distribuir a otros socios del club necesitas una cuenta del Apple
    Developer Program (TestFlight o App Store).
 
+### Apple Watch
+
+El proyecto incluye la app de reloj (`ios/WatchApp/`, target
+`SFGolfGPS Watch App`), equivalente al módulo `wear/` de Android:
+
+- **B / C / F** alrededor de la distancia grande al green (con el pin del día
+  sincronizado desde el iPhone) y **palo sugerido** con las yardas del jugador.
+- **Mini-mapa del hoyo** de fondo (fairway, bunkers, agua, pin y tu punto GPS
+  con línea al green), fundido sobre el negro del reloj.
+- **Contador de golpes** del jugador activo (▸ toca el nombre para cambiarlo)
+  y **scorecard completo** con OUT/IN/TOTAL y vs par deslizando hacia arriba.
+- Desliza a los lados para cambiar de hoyo; toca "HOLE n" para activar la
+  **detección automática por GPS** (el reloj tiene GPS propio: funciona aunque
+  dejes el iPhone en el carrito).
+- La ronda se **sincroniza en ambos sentidos** con el iPhone vía
+  WatchConnectivity (snapshot completo, gana el más nuevo — mismo diseño que
+  el Data Layer en Android).
+
+Se instala sola junto con la app del iPhone (target embebido). Aún sin
+complicación de carátula ni Tile (los equivalentes de Wear OS quedan para
+después vía WidgetKit).
+
 Notas del port iOS v1: la app es 100% local (aún sin la sección de cuenta /
-respaldo Firebase de Android) y todavía no incluye app de Apple Watch (el
-equivalente del módulo `wear/`). La persistencia usa UserDefaults con las
-mismas llaves y formatos que SharedPreferences en Android.
+respaldo Firebase de Android). La persistencia usa UserDefaults con las
+mismas llaves y formatos que SharedPreferences en Android. Los datos del
+campo compartidos entre iPhone y Watch viven en `ios/Shared/`.
 
 ## Cuenta y respaldo en la nube (opcional)
 

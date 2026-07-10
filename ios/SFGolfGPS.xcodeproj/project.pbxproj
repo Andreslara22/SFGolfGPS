@@ -6,8 +6,37 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		AA00000000000000000000F1 /* SFGolfGPS Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = AA00000000000000000000A7 /* SFGolfGPS Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		AA00000000000000000000E2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = AA00000000000000000000E1 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = AA00000000000000000000C2;
+			remoteInfo = "SFGolfGPS Watch App";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		AA00000000000000000000B4 /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				AA00000000000000000000F1 /* SFGolfGPS Watch App.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		AA00000000000000000000A4 /* SFGolfGPS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SFGolfGPS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA00000000000000000000A7 /* SFGolfGPS Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "SFGolfGPS Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -16,10 +45,27 @@
 			path = SFGolfGPS;
 			sourceTree = "<group>";
 		};
+		AA00000000000000000000A5 /* Shared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		AA00000000000000000000A6 /* WatchApp */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = WatchApp;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		AA00000000000000000000B2 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AA00000000000000000000B6 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -33,6 +79,8 @@
 			isa = PBXGroup;
 			children = (
 				AA00000000000000000000A1 /* SFGolfGPS */,
+				AA00000000000000000000A5 /* Shared */,
+				AA00000000000000000000A6 /* WatchApp */,
 				AA00000000000000000000A3 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -41,6 +89,7 @@
 			isa = PBXGroup;
 			children = (
 				AA00000000000000000000A4 /* SFGolfGPS.app */,
+				AA00000000000000000000A7 /* SFGolfGPS Watch App.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -55,19 +104,45 @@
 				AA00000000000000000000B1 /* Sources */,
 				AA00000000000000000000B2 /* Frameworks */,
 				AA00000000000000000000B3 /* Resources */,
+				AA00000000000000000000B4 /* Embed Watch Content */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				AA00000000000000000000C3 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				AA00000000000000000000A1 /* SFGolfGPS */,
+				AA00000000000000000000A5 /* Shared */,
 			);
 			name = SFGolfGPS;
 			packageProductDependencies = (
 			);
 			productName = SFGolfGPS;
 			productReference = AA00000000000000000000A4 /* SFGolfGPS.app */;
+			productType = "com.apple.product-type.application";
+		};
+		AA00000000000000000000C2 /* SFGolfGPS Watch App */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AA00000000000000000000D6 /* Build configuration list for PBXNativeTarget "SFGolfGPS Watch App" */;
+			buildPhases = (
+				AA00000000000000000000B5 /* Sources */,
+				AA00000000000000000000B6 /* Frameworks */,
+				AA00000000000000000000B7 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				AA00000000000000000000A6 /* WatchApp */,
+				AA00000000000000000000A5 /* Shared */,
+			);
+			name = "SFGolfGPS Watch App";
+			packageProductDependencies = (
+			);
+			productName = "SFGolfGPS Watch App";
+			productReference = AA00000000000000000000A7 /* SFGolfGPS Watch App.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -81,6 +156,9 @@
 				LastUpgradeCheck = 1600;
 				TargetAttributes = {
 					AA00000000000000000000C1 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+					AA00000000000000000000C2 = {
 						CreatedOnToolsVersion = 16.0;
 					};
 				};
@@ -101,12 +179,20 @@
 			projectRoot = "";
 			targets = (
 				AA00000000000000000000C1 /* SFGolfGPS */,
+				AA00000000000000000000C2 /* SFGolfGPS Watch App */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		AA00000000000000000000B3 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AA00000000000000000000B7 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -123,7 +209,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AA00000000000000000000B5 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		AA00000000000000000000C3 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = AA00000000000000000000C2 /* SFGolfGPS Watch App */;
+			targetProxy = AA00000000000000000000E2 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		AA00000000000000000000D1 /* Debug */ = {
@@ -302,6 +403,66 @@
 			};
 			name = Release;
 		};
+		AA00000000000000000000D7 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "SF Golf GPS";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Tu ubicación se usa para medir la distancia al green y detectar el hoyo en el que estás. Nunca sale de tu reloj.";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_WKApplication = YES;
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = mx.clubsanfrancisco.golfgps;
+				INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = mx.clubsanfrancisco.golfgps.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Debug;
+		};
+		AA00000000000000000000D8 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "SF Golf GPS";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Tu ubicación se usa para medir la distancia al green y detectar el hoyo en el que estás. Nunca sale de tu reloj.";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_WKApplication = YES;
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = mx.clubsanfrancisco.golfgps;
+				INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = mx.clubsanfrancisco.golfgps.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -319,6 +480,15 @@
 			buildConfigurations = (
 				AA00000000000000000000D4 /* Debug */,
 				AA00000000000000000000D5 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AA00000000000000000000D6 /* Build configuration list for PBXNativeTarget "SFGolfGPS Watch App" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA00000000000000000000D7 /* Debug */,
+				AA00000000000000000000D8 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
