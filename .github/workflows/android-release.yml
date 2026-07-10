@@ -8,6 +8,7 @@ on:
     branches: ["main", "claude/**"]
     paths:
       - "app/**"
+      - "wear/**"
       - "build.gradle.kts"
       - "settings.gradle.kts"
       - "gradle/**"
@@ -37,11 +38,15 @@ jobs:
       - name: Compilar APK de release (para probar por instalación directa)
         run: ./gradlew :app:assembleRelease --no-daemon
 
+      - name: Compilar APK del reloj (Wear OS)
+        run: ./gradlew :wear:assembleRelease --no-daemon
+
       - name: Renombrar artefactos
         run: |
           mkdir -p out
           cp app/build/outputs/bundle/release/app-release.aab out/SFGolfGPS-release.aab
           cp app/build/outputs/apk/release/app-release.apk out/SFGolfGPS-release.apk
+          cp wear/build/outputs/apk/release/wear-release.apk out/SFGolfGPS-wear.apk
           ls -lh out
 
       - name: Subir AAB (para Google Play)
@@ -56,4 +61,11 @@ jobs:
         with:
           name: SFGolfGPS-apk
           path: out/SFGolfGPS-release.apk
+          retention-days: 30
+
+      - name: Subir APK del reloj (Wear OS)
+        uses: actions/upload-artifact@v4
+        with:
+          name: SFGolfGPS-wear-apk
+          path: out/SFGolfGPS-wear.apk
           retention-days: 30

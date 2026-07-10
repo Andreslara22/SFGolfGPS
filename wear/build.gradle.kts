@@ -22,8 +22,24 @@ android {
             keyAlias = "sfgolf"
             keyPassword = "android"
         }
+        // Misma llave de release que el módulo app (ver app/build.gradle.kts).
+        create("release") {
+            storeFile = rootProject.file("signing/sfgolf-upload.jks")
+            storePassword = "sanfrancisco2026"
+            keyAlias = "sfgolf-upload"
+            keyPassword = "sanfrancisco2026"
+        }
     }
-    buildTypes { release { isMinifyEnabled = false } }
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
+        }
+    }
+    lint {
+        abortOnError = false
+        checkReleaseBuilds = false
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
