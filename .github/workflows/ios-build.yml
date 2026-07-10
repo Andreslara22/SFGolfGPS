@@ -65,6 +65,9 @@ jobs:
         run: |
           mkdir -p sim-upload
           cp -R build-sim/Build/Products/Release-iphonesimulator/SFGolfGPS.app sim-upload/
+          # La app del Watch anidada confunde el detector de appetize.io y no
+          # funciona en simulador web de todos modos.
+          rm -rf "sim-upload/SFGolfGPS.app/Watch"
 
       - name: Subir build de simulador como artefacto
         uses: actions/upload-artifact@v4
