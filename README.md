@@ -1,8 +1,9 @@
 # SF Golf GPS — Club de Golf San Francisco (Chihuahua)
 
-App Android **100% nativa** (Kotlin + Jetpack Compose). Sin servicios de terceros:
-el GPS usa `LocationManager` del sistema Android y los datos del campo están
-embebidos localmente. Funciona sin internet.
+App **100% nativa** para **Android** (Kotlin + Jetpack Compose) y **iOS**
+(Swift + SwiftUI, carpeta `ios/`). Sin servicios de terceros: el GPS usa el
+`LocationManager` del sistema en Android y CoreLocation en iOS, y los datos
+del campo están embebidos localmente. Funciona sin internet.
 
 ## Funciones
 - **Distancia en tiempo real** de tu posición al centro del green (fórmula de Haversine), en número gigante legible a pleno sol.
@@ -24,12 +25,34 @@ embebidos localmente. Funciona sin internet.
 - Pantalla siempre encendida durante la ronda.
 - Golpes y ajustes se guardan aunque cierres la app (SharedPreferences).
 
-## Cómo compilar
+## Cómo compilar (Android)
 1. Abre la carpeta `SFGolfGPS` en **Android Studio** (Hedgehog o más reciente, JDK 17).
 2. Deja que sincronice Gradle (descarga AGP 8.2.2 / Kotlin 1.9.22 automáticamente).
 3. Conecta tu teléfono con depuración USB y presiona **Run**, o genera el APK:
    `Build > Build Bundle(s) / APK(s) > Build APK(s)`.
 4. Instala el APK. Al abrirla, acepta el permiso de **ubicación precisa**.
+
+## Cómo compilar (iOS)
+
+La app iOS vive en **`ios/`** y es un port nativo 1:1 de la app Android
+(SwiftUI, sin dependencias externas). Misma lógica: Haversine, F/C/B por
+profundidad de green, "plays like" autocalibrado, mapa por hoyo con cursor de
+layup, medir golpe, Skins / Match Play / Stableford, handicap WHS y compartir
+la tarjeta como PNG. Los datos del campo (`CourseData.swift`) son espejo de
+`CourseData.kt`: si afinas una coordenada en uno, cópiala al otro.
+
+1. En una Mac con **Xcode 16 o más reciente**, abre `ios/SFGolfGPS.xcodeproj`.
+2. En *Signing & Capabilities* selecciona tu **Team** (basta una cuenta de
+   Apple ID gratuita para instalar en tu propio iPhone).
+3. Conecta el iPhone, elígelo como destino y presiona **Run** (⌘R).
+4. Al abrirla, acepta el permiso de **ubicación mientras usas la app**.
+5. Para distribuir a otros socios del club necesitas una cuenta del Apple
+   Developer Program (TestFlight o App Store).
+
+Notas del port iOS v1: la app es 100% local (aún sin la sección de cuenta /
+respaldo Firebase de Android) y todavía no incluye app de Apple Watch (el
+equivalente del módulo `wear/`). La persistencia usa UserDefaults con las
+mismas llaves y formatos que SharedPreferences en Android.
 
 ## Cuenta y respaldo en la nube (opcional)
 
