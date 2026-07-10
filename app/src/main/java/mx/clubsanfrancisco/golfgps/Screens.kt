@@ -282,10 +282,12 @@ private fun RangeScreen(vm: GolfViewModel, onRequestPermission: () -> Unit) {
                             .align(Alignment.TopStart)
                             .padding(start = 16.dp, top = 14.dp)
                     ) {
-                        if (distAdjM != null && distValue != null) {
+                        if (distAdjM != null && distValue != null && distM != null) {
+                            // F/B = bordes REALES del green (fijos, medidos en
+                            // satélite); solo el número grande sigue al pin.
                             val half = hole.greenDepthM / 2.0
-                            val fM = (distAdjM - half).coerceAtLeast(0.0)
-                            val bM = distAdjM + half
+                            val fM = (distM - half).coerceAtLeast(0.0)
+                            val bM = distM + half
                             val fV = if (yards) metersToYards(fM).roundToInt() else fM.roundToInt()
                             val bV = if (yards) metersToYards(bM).roundToInt() else bM.roundToInt()
                             OverlayFcb("B", bV, mapShadow)

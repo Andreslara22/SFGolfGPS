@@ -374,13 +374,16 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                 // frente ≈ -depth/4 · fondo ≈ +depth/4
                 val flag = flags.getOrNull(holeIdx) ?: -1
                 val pinShift = when (flag) { 0 -> -hole.depthM / 4.0; 2 -> hole.depthM / 4.0; else -> 0.0 }
-                val distM = if (lat != null && lng != null)
-                    (meters(lat!!, lng!!, hole.greenLat, hole.greenLng) + pinShift).coerceAtLeast(0.0)
-                    else null
+                // rawM = al centro real del green · distM = al pin del día.
+                // F/B son los bordes FIJOS del green (medidos en satélite);
+                // solo el número grande sigue al pin.
+                val rawM = if (lat != null && lng != null)
+                    meters(lat!!, lng!!, hole.greenLat, hole.greenLng) else null
+                val distM = rawM?.plus(pinShift)?.coerceAtLeast(0.0)
                 val half = hole.depthM / 2.0
                 val center = distM?.let { distVal(it) }
-                val front = distM?.let { distVal((it - half).coerceAtLeast(0.0)) }
-                val back = distM?.let { distVal(it + half) }
+                val front = rawM?.let { distVal((it - half).coerceAtLeast(0.0)) }
+                val back = rawM?.let { distVal(it + half) }
                 val player = wplayers.getOrNull(activePlayer)
                 val strokeVal = player?.strokes?.getOrNull(holeIdx) ?: 0
 
