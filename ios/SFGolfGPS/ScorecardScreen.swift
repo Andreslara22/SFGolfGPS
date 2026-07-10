@@ -414,7 +414,8 @@ struct ScoreCell: View {
             Text("·").foregroundColor(pal.onSurfaceVariant)
         } else {
             let diff = strokes - par
-            let frame: Color = diff < 0 ? pal.primary : (diff > 0 ? pal.error : .clear)
+            // Aro/cuadro neutros: tinta en tema claro, blanco en oscuro (igual que el número).
+            let frame: Color = diff == 0 ? .clear : pal.onSurface
             Text("\(strokes)")
                 .font(.system(size: 14, weight: .bold))
                 .foregroundColor(pal.onSurface)

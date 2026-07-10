@@ -58,7 +58,6 @@ import kotlin.math.roundToInt
 
 private val Mint = Color(0xFF7ADFA8)
 private val Dim = Color(0xFF9BB8A8)
-private val Amber = Color(0xFFF3B61F)
 
 // Data Layer: snapshot completo de la ronda (mismo formato que la app de teléfono).
 private const val STATE_PATH = "/round/state"
@@ -442,7 +441,7 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                                     "▸ ${player.name}",
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Amber,
+                                    color = Color.White,
                                     modifier = Modifier.clickable { cyclePlayer() }
                                 )
                             }
@@ -464,7 +463,7 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                                 )
                                 Text(
                                     center?.toString() ?: (if (granted) "– –" else "GPS?"),
-                                    fontSize = 42.sp, fontWeight = FontWeight.Black, color = Amber
+                                    fontSize = 42.sp, fontWeight = FontWeight.Black, color = Color.White
                                 )
                                 Text(
                                     front?.toString() ?: "–",
@@ -532,7 +531,7 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                 item {
                     Text(
                         "TARJETA" + if (wplayers.size > 1) " · ▸ ${p?.name ?: ""}" else "",
-                        fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Amber,
+                        fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White,
                         modifier = Modifier.clickable { cyclePlayer() }
                     )
                 }

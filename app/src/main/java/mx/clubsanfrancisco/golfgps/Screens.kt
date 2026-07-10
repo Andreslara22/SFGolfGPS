@@ -1249,11 +1249,8 @@ private fun ScoreCell(strokes: Int, par: Int) {
     }
     val diff = strokes - par
     val shape = if (diff < 0) CircleShape else RoundedCornerShape(5.dp)
-    val frame = when {
-        diff < 0 -> MaterialTheme.colorScheme.primary
-        diff > 0 -> MaterialTheme.colorScheme.error
-        else -> Color.Transparent
-    }
+    // Aro/cuadro neutros: tinta en tema claro, blanco en oscuro (igual que el número).
+    val frame = if (diff == 0) Color.Transparent else MaterialTheme.colorScheme.onSurface
     Box(
         Modifier.size(27.dp).border(1.6.dp, frame, shape),
         contentAlignment = Alignment.Center

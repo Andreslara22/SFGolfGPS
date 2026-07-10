@@ -2,7 +2,6 @@ import SwiftUI
 
 private let mint = Color(argb: 0xFF7ADFA8)
 private let dim = Color(argb: 0xFF9BB8A8)
-private let amber = Color(argb: 0xFFF3B61F)
 
 /// Raíz del reloj: página principal arriba, scorecard con swipe vertical
 /// (equivalente al swipe-up del módulo Wear OS).
@@ -63,7 +62,7 @@ struct WatchMainView: View {
                     if model.players.count > 1, let player {
                         Text("▸ \(player.name)")
                             .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(amber)
+                            .foregroundColor(.white)
                             .onTapGesture { model.cyclePlayer() }
                     }
                 }
@@ -78,7 +77,7 @@ struct WatchMainView: View {
                             .foregroundColor(.white)
                         Text(center.map(String.init) ?? (model.granted ? "– –" : "GPS?"))
                             .font(.system(size: 42, weight: .black))
-                            .foregroundColor(amber)
+                            .foregroundColor(.white)
                             .minimumScaleFactor(0.6)
                             .lineLimit(1)
                         Text(front.map(String.init) ?? "–")
@@ -154,7 +153,7 @@ struct WatchScorecardView: View {
             VStack(spacing: 4) {
                 Text("TARJETA" + (model.players.count > 1 ? " · ▸ \(p?.name ?? "")" : ""))
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(amber)
+                    .foregroundColor(.white)
                     .onTapGesture { model.cyclePlayer() }
 
                 ForEach(0..<18, id: \.self) { i in
