@@ -853,6 +853,7 @@ private fun scoreName(diff: Int, str: AppStrings): String = when {
 private fun ScorecardScreen(vm: GolfViewModel) {
     val str = LocalStrings.current
     var showFinishDialog by remember { mutableStateOf(false) }
+    var showGamesInfo by remember { mutableStateOf(false) }
     val dateFmt = remember { SimpleDateFormat("MMM d · h:mm a", Locale.US) }
     val context = LocalContext.current
     val anyScores = vm.players.any { it.playedHoles() > 0 }
@@ -955,10 +956,40 @@ private fun ScorecardScreen(vm: GolfViewModel) {
                 Spacer(Modifier.height(14.dp))
             }
 
-            // ---- Juegos: Skins + Match Play ----
+            // ---- Juegos: Skins + Match Play + Stableford (opcionales) ----
             if (vm.players.size >= 2) {
-                Text(str.games, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(8.dp))
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        str.games,
+                        Modifier.weight(1f),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    TextButton(onClick = { showGamesInfo = true }) {
+                        Text(str.gamesHowTo, fontSize = 12.sp)
+                    }
+                }
+                Spacer(Modifier.height(4.dp))
+                if (!vm.gamesEnabled) {
+                    Card(
+                        Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+                            Text(
+                                str.gamesOffHint,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Button(
+                                onClick = { vm.toggleGames() },
+                                shape = RoundedCornerShape(12.dp)
+                            ) { Text(str.gamesEnableBtn) }
+                        }
+                    }
+                } else {
                 Card(
                     Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
@@ -1097,7 +1128,15 @@ private fun ScorecardScreen(vm: GolfViewModel) {
                                 )
                             }
                         }
+                        TextButton(onClick = { vm.toggleGames() }) {
+                            Text(
+                                str.gamesDisableBtn,
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
+                }
                 }
                 Spacer(Modifier.height(14.dp))
             }
@@ -1154,6 +1193,17 @@ private fun ScorecardScreen(vm: GolfViewModel) {
             Spacer(Modifier.height(8.dp))
         }
         item { Spacer(Modifier.height(24.dp)) }
+    }
+
+    if (showGamesInfo) {
+        AlertDialog(
+            onDismissRequest = { showGamesInfo = false },
+            title = { Text(str.gamesInfoTitle) },
+            text = { Text(str.gamesInfoBody) },
+            confirmButton = {
+                TextButton(onClick = { showGamesInfo = false }) { Text(str.gamesInfoOk) }
+            }
+        )
     }
 
     if (showFinishDialog) {

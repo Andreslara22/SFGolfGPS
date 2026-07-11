@@ -41,6 +41,13 @@ interface AppStrings {
     val legend: String
     val roundStats: String
     val games: String
+    val gamesHowTo: String
+    val gamesOffHint: String
+    val gamesEnableBtn: String
+    val gamesDisableBtn: String
+    val gamesInfoTitle: String
+    val gamesInfoBody: String
+    val gamesInfoOk: String
     val skinsEmpty: String
     fun carriedSkins(n: Int): String
     fun skinsWinLine(name: String, n: Int): String
@@ -147,6 +154,25 @@ object StringsEs : AppStrings {
     override val legend = "⭕ bajo par · ⬜ sobre par"
     override val roundStats = "🎯 Stats de la ronda"
     override val games = "🏆 Juegos"
+    override val gamesHowTo = "ⓘ ¿Cómo funcionan?"
+    override val gamesOffHint = "Skins y puntos (Stableford) se calculan solos con los golpes " +
+        "que ya anotas. Actívalos solo si los van a jugar."
+    override val gamesEnableBtn = "🎲 Activar Skins y Puntos"
+    override val gamesDisableBtn = "Desactivar juegos"
+    override val gamesInfoTitle = "🏆 Skins y Puntos"
+    override val gamesInfoBody =
+        "SKINS — cada hoyo vale 1 skin y se lo lleva quien haga el menor " +
+            "score del hoyo, solo si gana en solitario. Si hay empate, ese " +
+            "skin se acarrea y el siguiente hoyo vale más. Gana quien junte " +
+            "más skins.\n\n" +
+            "PUNTOS (Stableford) — cada hoyo da puntos según tu score neto " +
+            "con handicap: birdie 3 · par 2 · bogey 1 · doble bogey o peor 0. " +
+            "El handicap de cada jugador (se ajusta en Players) reparte " +
+            "golpes de ventaja en los hoyos más difíciles. Gana quien sume " +
+            "más puntos.\n\n" +
+            "Los dos se calculan solos con los golpes que ya anotas — no hay " +
+            "que capturar nada extra."
+    override val gamesInfoOk = "Entendido"
     override val skinsEmpty = "Anota los golpes de todos los jugadores en un hoyo y aquí aparecen los skins. Empates se acarrean."
     override fun carriedSkins(n: Int) =
         "🔥 $n skin${if (n == 1) "" else "s"} acarreado${if (n == 1) "" else "s"} al siguiente hoyo"
@@ -256,6 +282,25 @@ object StringsEn : AppStrings {
     override val legend = "⭕ under par · ⬜ over par"
     override val roundStats = "🎯 Round stats"
     override val games = "🏆 Games"
+    override val gamesHowTo = "ⓘ How do they work?"
+    override val gamesOffHint = "Skins and points (Stableford) are computed automatically from " +
+        "the strokes you already enter. Turn them on only if you're playing them."
+    override val gamesEnableBtn = "🎲 Enable Skins & Points"
+    override val gamesDisableBtn = "Disable games"
+    override val gamesInfoTitle = "🏆 Skins & Points"
+    override val gamesInfoBody =
+        "SKINS — every hole is worth 1 skin, won by whoever shoots the " +
+            "lowest score on the hole, but only with an outright win. On a " +
+            "tie the skin carries over and the next hole is worth more. " +
+            "Most skins wins.\n\n" +
+            "POINTS (Stableford) — each hole awards points based on your " +
+            "net score with handicap: birdie 3 · par 2 · bogey 1 · double " +
+            "bogey or worse 0. Each player's handicap (set in Players) " +
+            "spreads advantage strokes across the hardest holes. Most " +
+            "points wins.\n\n" +
+            "Both are computed automatically from the strokes you already " +
+            "enter — nothing extra to capture."
+    override val gamesInfoOk = "Got it"
     override val skinsEmpty = "Enter every player's strokes on a hole and skins show up here. Ties carry over."
     override fun carriedSkins(n: Int) =
         "🔥 $n skin${if (n == 1) "" else "s"} carried to the next hole"
