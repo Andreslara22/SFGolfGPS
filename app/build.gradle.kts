@@ -11,8 +11,8 @@ android {
         applicationId = "mx.clubsanfrancisco.golfgps"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "1.3"
+        versionCode = 5
+        versionName = "1.4"
     }
 
     // Llave de firma FIJA (versionada en el repo): permite actualizar la app
