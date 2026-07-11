@@ -600,6 +600,29 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
     }
 
     /**
+     * Historial hoyo por hoyo de Skins (solo hoyos con golpes de todos):
+     * Triple(indice de hoyo, indice del ganador o -1 si empate, skins en juego).
+     */
+    fun skinsHistory(): List<Triple<Int, Int, Int>> {
+        val out = ArrayList<Triple<Int, Int, Int>>()
+        var pot = 0
+        for (h in 0 until 18) {
+            val scores = players.map { it.strokes[h] }
+            if (scores.isEmpty() || scores.any { it == 0 }) continue
+            pot += 1
+            val minScore = scores.min()
+            val winners = scores.withIndex().filter { it.value == minScore }
+            if (winners.size == 1) {
+                out.add(Triple(h, winners.first().index, pot))
+                pot = 0
+            } else {
+                out.add(Triple(h, -1, pot))
+            }
+        }
+        return out
+    }
+
+    /**
      * Match play clásico para exactamente 2 jugadores.
      * Devuelve el estado legible ("Andres 2 UP thru 7", "All square thru 7",
      * "Andres gana 3&2") o null si no aplica.

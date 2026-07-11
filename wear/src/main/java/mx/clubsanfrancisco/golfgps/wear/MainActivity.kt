@@ -254,6 +254,14 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
             .putBoolean("auto", auto)
             .putString("flags", flags.joinToString(","))
             .putLong("stateTs", stateTs)
+            // Distancia actual al centro del green (para tile/complicación).
+            .putInt("dist", run {
+                val h = WearCourse.holes[holeIdx]
+                val la = lat; val lo = lng
+                if (la != null && lo != null)
+                    meters(la, lo, h.greenLat, h.greenLng).roundToInt() else -1
+            })
+            .putLong("distTs", System.currentTimeMillis())
             .apply()
         // Refresca el tile y la complicación de la carátula con el hoyo/golpes actuales.
         runCatching {

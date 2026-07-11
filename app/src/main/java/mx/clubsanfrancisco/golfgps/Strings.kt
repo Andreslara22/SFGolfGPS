@@ -43,11 +43,18 @@ interface AppStrings {
     val games: String
     val skinsEmpty: String
     fun carriedSkins(n: Int): String
+    fun skinsWinLine(name: String, n: Int): String
+    fun skinsTieLine(pot: Int): String
+    val skinsHistoryShow: String
+    val skinsHistoryHide: String
     val stablefordTitle: String
     val stablefordHint: String
     val finishBtn: String
     val shareBtn: String
+    val sharePdfBtn: String
     val shareChooser: String
+    val chipGreen: String
+    val chipHole: String
     val historyTitle: String
     val historyEmpty: String
     val strokesWord: String
@@ -143,11 +150,19 @@ object StringsEs : AppStrings {
     override val skinsEmpty = "Anota los golpes de todos los jugadores en un hoyo y aquí aparecen los skins. Empates se acarrean."
     override fun carriedSkins(n: Int) =
         "🔥 $n skin${if (n == 1) "" else "s"} acarreado${if (n == 1) "" else "s"} al siguiente hoyo"
+    override fun skinsWinLine(name: String, n: Int) =
+        "$name gana $n skin${if (n == 1) "" else "s"}"
+    override fun skinsTieLine(pot: Int) = "Empate · arrastra $pot"
+    override val skinsHistoryShow = "Ver historial por hoyo ▾"
+    override val skinsHistoryHide = "Ocultar historial ▴"
     override val stablefordTitle = "STABLEFORD · CON HANDICAP"
     override val stablefordHint = "Par neto = 2 pts, birdie 3, bogey 1. Configura el handicap de cada jugador en Jugadores para que reparta golpes de ventaja."
     override val finishBtn = "🏁 Terminar y guardar ronda"
     override val shareBtn = "📤 Compartir tarjeta como imagen"
+    override val sharePdfBtn = "📄 Compartir tarjeta en PDF"
     override val shareChooser = "Compartir tarjeta"
+    override val chipGreen = "VER GREEN"
+    override val chipHole = "VER HOYO"
     override val historyTitle = "Historial de rondas"
     override val historyEmpty = "Aún no hay rondas guardadas. Termina una ronda para verla aquí. 🌱"
     override val strokesWord = "golpes"
@@ -244,11 +259,19 @@ object StringsEn : AppStrings {
     override val skinsEmpty = "Enter every player's strokes on a hole and skins show up here. Ties carry over."
     override fun carriedSkins(n: Int) =
         "🔥 $n skin${if (n == 1) "" else "s"} carried to the next hole"
+    override fun skinsWinLine(name: String, n: Int) =
+        "$name wins $n skin${if (n == 1) "" else "s"}"
+    override fun skinsTieLine(pot: Int) = "Tie · carries $pot"
+    override val skinsHistoryShow = "Show hole-by-hole history ▾"
+    override val skinsHistoryHide = "Hide history ▴"
     override val stablefordTitle = "STABLEFORD · WITH HANDICAP"
     override val stablefordHint = "Net par = 2 pts, birdie 3, bogey 1. Set each player's handicap in Players to hand out advantage strokes."
     override val finishBtn = "🏁 Finish & save round"
     override val shareBtn = "📤 Share scorecard as image"
+    override val sharePdfBtn = "📄 Share scorecard as PDF"
     override val shareChooser = "Share scorecard"
+    override val chipGreen = "GREEN VIEW"
+    override val chipHole = "FULL HOLE"
     override val historyTitle = "Round history"
     override val historyEmpty = "No saved rounds yet. Finish a round to keep it here. 🌱"
     override val strokesWord = "strokes"

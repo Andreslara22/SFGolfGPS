@@ -47,6 +47,29 @@ object ScorecardImage {
         }
     }
 
+    /** Igual que [shareIntent] pero en PDF (una página con la tarjeta). */
+    fun sharePdfIntent(context: Context, vm: GolfViewModel): Intent? {
+        val players = vm.players.toList()
+        if (players.isEmpty()) return null
+        val bmp = render(vm, players)
+        val doc = android.graphics.pdf.PdfDocument()
+        val page = doc.startPage(
+            android.graphics.pdf.PdfDocument.PageInfo.Builder(bmp.width, bmp.height, 1).create()
+        )
+        page.canvas.drawBitmap(bmp, 0f, 0f, null)
+        doc.finishPage(page)
+        val dir = File(context.cacheDir, "shared").apply { mkdirs() }
+        val file = File(dir, "tarjeta_sfgolf.pdf")
+        FileOutputStream(file).use { doc.writeTo(it) }
+        doc.close()
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        return Intent(Intent.ACTION_SEND).apply {
+            type = "application/pdf"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+    }
+
     private fun paint(size: Float, color: Int, bold: Boolean, center: Boolean = false) =
         Paint(Paint.ANTI_ALIAS_FLAG).apply {
             textSize = size

@@ -273,8 +273,29 @@ private fun RangeScreen(vm: GolfViewModel, onRequestPermission: () -> Unit) {
             }
 
             // ---- Mapa héroe con distancias superpuestas (B/C/F, como el reloj) ----
+            // A <45 m del green cambia solo a la vista de green ampliada
+            // (el chip de la esquina permite forzar una u otra).
+            var greenViewOverride by remember(vm.currentHoleIndex) { mutableStateOf<Boolean?>(null) }
+            val showGreenView = greenViewOverride ?: (distM != null && distM < 45.0)
             Box(Modifier.fillMaxWidth()) {
-                HoleMapCard(hole, vm.userLat, vm.userLng, vm.units, flag)
+                if (showGreenView) {
+                    GreenZoomCard(hole, vm.userLat, vm.userLng, vm.units, flag)
+                } else {
+                    HoleMapCard(hole, vm.userLat, vm.userLng, vm.units, flag)
+                }
+                Text(
+                    if (showGreenView) str.chipHole else str.chipGreen,
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 12.dp, bottom = 12.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(Color(0xB31E2A1E))
+                        .clickable { greenViewOverride = !showGreenView }
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    color = Color.White,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
                 if (vm.hasLocationPermission) {
                     val mapShadow = Shadow(Color(0xCC1E2A1E), Offset(0f, 3f), 10f)
                     Column(
@@ -986,6 +1007,42 @@ private fun ScorecardScreen(vm: GolfViewModel) {
                                 )
                             }
                         }
+                        // ---- Historial hoyo por hoyo de skins (expandible) ----
+                        val skinsHist = vm.skinsHistory()
+                        if (skinsHist.isNotEmpty()) {
+                            var showHist by remember { mutableStateOf(false) }
+                            Text(
+                                if (showHist) str.skinsHistoryHide else str.skinsHistoryShow,
+                                Modifier
+                                    .clickable { showHist = !showHist }
+                                    .padding(vertical = 6.dp),
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            if (showHist) {
+                                skinsHist.forEach { (h, winner, atStake) ->
+                                    Row(Modifier.fillMaxWidth().padding(vertical = 1.dp)) {
+                                        Text(
+                                            "H${h + 1}",
+                                            Modifier.width(36.dp),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Text(
+                                            if (winner >= 0)
+                                                str.skinsWinLine(vm.players[winner].name.take(12), atStake)
+                                            else str.skinsTieLine(atStake),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = if (winner >= 0) MaterialTheme.colorScheme.onSurface
+                                            else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
                         vm.matchPlayStatus(vm.language == AppLanguage.EN)?.let { status ->
                             Spacer(Modifier.height(10.dp))
                             Text(
@@ -1062,6 +1119,18 @@ private fun ScorecardScreen(vm: GolfViewModel) {
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp)
             ) { Text(str.shareBtn) }
+
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = {
+                    ScorecardImage.sharePdfIntent(context, vm)?.let {
+                        context.startActivity(Intent.createChooser(it, str.shareChooser))
+                    }
+                },
+                enabled = anyScores,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp)
+            ) { Text(str.sharePdfBtn) }
 
             Spacer(Modifier.height(22.dp))
             Text(str.historyTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)

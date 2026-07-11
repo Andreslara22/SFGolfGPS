@@ -27,13 +27,25 @@ class RoundComplicationService : ComplicationDataSourceService() {
         val active = prefs.getInt("active", 0)
         val strokes = prefs.getString("scores", null)?.split(SEP)?.getOrNull(active)
             ?.split(",")?.mapNotNull { it.toIntOrNull() }?.getOrNull(hole - 1) ?: 0
-        listener.onComplicationData(build(request.complicationType, hole, strokes))
+        // Distancia al green del último fix GPS (solo si es reciente, <15 min).
+        val distM = prefs.getInt("dist", -1)
+        val fresh = System.currentTimeMillis() - prefs.getLong("distTs", 0L) < 15 * 60_000L
+        val yards = prefs.getString("units", "YARDS") != "METERS"
+        val distTxt = if (distM >= 0 && fresh) {
+            if (yards) "${(distM * 1.09361).toInt()}y" else "${distM}m"
+        } else null
+        listener.onComplicationData(build(request.complicationType, hole, strokes, distTxt))
     }
 
     override fun getPreviewData(type: ComplicationType): ComplicationData? =
-        build(type, 7, 3)
+        build(type, 7, 3, "136m")
 
-    private fun build(type: ComplicationType, hole: Int, strokes: Int): ComplicationData? {
+    private fun build(
+        type: ComplicationType,
+        hole: Int,
+        strokes: Int,
+        distTxt: String? = null
+    ): ComplicationData? {
         val tap = PendingIntent.getActivity(
             this, 0, Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
@@ -42,14 +54,22 @@ class RoundComplicationService : ComplicationDataSourceService() {
         return when (type) {
             ComplicationType.SHORT_TEXT ->
                 ShortTextComplicationData.Builder(
-                    PlainComplicationText.Builder("H$hole").build(), desc
+                    // Con GPS fresco: la distancia al green manda; si no, el hoyo.
+                    PlainComplicationText.Builder(distTxt ?: "H$hole").build(), desc
                 )
-                    .setTitle(PlainComplicationText.Builder("⛳$strokes").build())
+                    .setTitle(
+                        PlainComplicationText.Builder(
+                            if (distTxt != null) "H$hole·⛳$strokes" else "⛳$strokes"
+                        ).build()
+                    )
                     .setTapAction(tap)
                     .build()
             ComplicationType.LONG_TEXT ->
                 LongTextComplicationData.Builder(
-                    PlainComplicationText.Builder("Hoyo $hole · $strokes golpes").build(), desc
+                    PlainComplicationText.Builder(
+                        if (distTxt != null) "Hoyo $hole · $distTxt al green · $strokes golpes"
+                        else "Hoyo $hole · $strokes golpes"
+                    ).build(), desc
                 )
                     .setTapAction(tap)
                     .build()

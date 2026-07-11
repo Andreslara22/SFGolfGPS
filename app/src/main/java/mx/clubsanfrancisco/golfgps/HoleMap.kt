@@ -605,3 +605,125 @@ private fun DrawScope.drawHoleMap(
         if (offMap) drawDistLabel("(fuera del mapa)", user + Offset(0f, 34f), 0.8f)
     }
 }
+
+
+/**
+ * Vista de green ampliada para el approach (<~45 m): green a escala real
+ * usando la profundidad medida en satelite, pin del dia, bordes F/B y el
+ * punto GPS del jugador con linea al pin. Misma altura que el mapa del hoyo.
+ */
+@Composable
+fun GreenZoomCard(hole: Hole, userLat: Double?, userLng: Double?, units: Units, flag: Int = -1) {
+    val density = LocalDensity.current
+    val labelPx = with(density) { 12.dp.toPx() }
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(1000f / 890f),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = Waste)
+    ) {
+        Canvas(Modifier.fillMaxSize()) {
+            val w = size.width
+            val h = size.height
+            val rnd = Random(hole.number * 31)
+
+            // Fondo: desierto con banda de rough alrededor del green.
+            drawRect(Waste)
+            repeat(60) {
+                drawCircle(
+                    WasteDots,
+                    radius = rnd.nextFloat() * 2.2f + 1.2f,
+                    center = Offset(rnd.nextFloat() * w, rnd.nextFloat() * h)
+                )
+            }
+            val cx = w * 0.5f
+            val cy = h * 0.44f
+            val depthM = hole.greenDepthM.toFloat()
+            val scale = (h * 0.50f) / depthM       // px por metro
+            val ry = depthM * scale / 2f
+            val rx = (ry * 1.15f).coerceAtMost(w * 0.40f)
+
+            drawOval(RoughBand, topLeft = Offset(cx - rx - 34f, cy - ry - 30f), size = Size((rx + 34f) * 2, (ry + 30f) * 2))
+            drawOval(GreenFringe, topLeft = Offset(cx - rx - 14f, cy - ry - 12f), size = Size((rx + 14f) * 2, (ry + 12f) * 2))
+            drawOval(GreenTurf, topLeft = Offset(cx - rx, cy - ry), size = Size(rx * 2, ry * 2))
+            // brillo suave del centro
+            drawOval(
+                Color(0x33FFFFFF),
+                topLeft = Offset(cx - rx * 0.55f, cy - ry * 0.55f),
+                size = Size(rx * 1.1f, ry * 1.1f)
+            )
+
+            // Marcas de frente/fondo del green.
+            drawLine(GreenFringe, Offset(cx - 16f, cy - ry), Offset(cx + 16f, cy - ry), strokeWidth = 3f)
+            drawLine(GreenFringe, Offset(cx - 16f, cy + ry), Offset(cx + 16f, cy + ry), strokeWidth = 3f)
+
+            // Pin del dia: frente = abajo, fondo = arriba.
+            val pinY = when (flag) {
+                0 -> cy + ry * 0.5f
+                2 -> cy - ry * 0.5f
+                else -> cy
+            }
+            val pinColor = when (flag) {
+                0 -> Color(0xFFE85D4A)
+                2 -> Color(0xFF5AB0FF)
+                else -> FlagRed
+            }
+            drawCircle(Color(0x40243024), radius = 6f, center = Offset(cx + 2f, pinY + 2f))
+            drawCircle(Color(0xFFDDE8C9), radius = 4.5f, center = Offset(cx, pinY))
+            drawLine(Pole, Offset(cx, pinY), Offset(cx, pinY - 46f), strokeWidth = 3.5f)
+            val flagPath = Path().apply {
+                moveTo(cx + 1.5f, pinY - 46f)
+                lineTo(cx + 30f, pinY - 38f)
+                lineTo(cx + 1.5f, pinY - 29f)
+                close()
+            }
+            drawPath(flagPath, pinColor)
+
+            // Profundidad del green (etiqueta inferior derecha).
+            val depthTxt = if (units == Units.YARDS)
+                "${(hole.greenDepthM * 1.09361).roundToInt()} yd" else "${hole.greenDepthM.roundToInt()} m"
+            drawIntoCanvas { cv ->
+                val p = android.graphics.Paint().apply {
+                    color = android.graphics.Color.argb(210, 78, 90, 66)
+                    textSize = labelPx
+                    isAntiAlias = true
+                    typeface = android.graphics.Typeface.DEFAULT_BOLD
+                    textAlign = android.graphics.Paint.Align.RIGHT
+                }
+                cv.nativeCanvas.drawText("GREEN $depthTxt", w - 18f, h - 18f, p)
+            }
+
+            // Punto GPS del jugador orientado al eje tee->green + linea al pin.
+            if (userLat != null && userLng != null) {
+                val lat0 = (hole.teeLat + hole.greenLat) / 2
+                val lng0 = (hole.teeLng + hole.greenLng) / 2
+                fun local(lat: Double, lng: Double): Offset {
+                    val x = ((lng - lng0) * cos(Math.toRadians(lat0)) * 111320.0).toFloat()
+                    val y = (-(lat - lat0) * 110540.0).toFloat()
+                    return Offset(x, y)
+                }
+                val teeL = local(hole.teeLat, hole.teeLng)
+                val greenL = local(hole.greenLat, hole.greenLng)
+                val ang = atan2(greenL.y - teeL.y, greenL.x - teeL.x)
+                val rot = (-PI / 2 - ang).toFloat()
+                fun rotP(p: Offset): Offset {
+                    val c = cos(rot); val s = sin(rot)
+                    return Offset(p.x * c - p.y * s, p.x * s + p.y * c)
+                }
+                val rel = rotP(local(userLat, userLng) - greenL)
+                val user = Offset(
+                    (cx + rel.x * scale).coerceIn(14f, w - 14f),
+                    (cy + rel.y * scale).coerceIn(14f, h - 14f)
+                )
+                drawLine(
+                    LineDark.copy(alpha = 0.55f), user, Offset(cx, pinY), strokeWidth = 4.5f,
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f, 10f))
+                )
+                drawCircle(PlayerBlue.copy(alpha = 0.25f), radius = 16f, center = user)
+                drawCircle(Color.White, radius = 8.5f, center = user)
+                drawCircle(PlayerBlue, radius = 5.5f, center = user)
+            }
+        }
+    }
+}
