@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -584,6 +585,9 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                         )
                     }
                 }
+                // Margen inferior: sin él, la leyenda TOTAL queda pegada al
+                // bisel redondo al llegar al final del scroll.
+                item { Spacer(Modifier.height(30.dp)) }
             }
         }
     }

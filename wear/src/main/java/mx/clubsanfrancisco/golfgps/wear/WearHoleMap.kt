@@ -41,12 +41,22 @@ fun DrawScope.drawMiniHole(hole: WHole, feat: WFeatures, userLat: Double?, userL
     val w = size.width
     val h = size.height
 
+    // En pantalla redonda, el borde derecho útil a la altura `y` es el círculo,
+    // no `w`: los óvalos (agua/bunkers) se meten hacia adentro si lo rebasan.
+    fun clampInsideBezel(c: Offset, halfW: Float): Offset {
+        val r = min(w, h) / 2f - 6f
+        val dy = c.y - h / 2f
+        if (kotlin.math.abs(dy) >= r) return c
+        val maxX = w / 2f + sqrt(r * r - dy * dy) - halfW
+        return if (c.x > maxX) c.copy(x = maxX) else c
+    }
+
     // Base de terreno: transparente en la izquierda -> Rough hacia la derecha.
     drawRect(
         brush = Brush.horizontalGradient(
             0f to Color.Transparent,
-            0.40f to Color.Transparent,
-            0.60f to Rough,
+            0.36f to Color.Transparent,
+            0.56f to Rough,
             1f to Rough
         )
     )
@@ -68,10 +78,12 @@ fun DrawScope.drawMiniHole(hole: WHole, feat: WFeatures, userLat: Double?, userL
         return Offset(p.x * c - p.y * s, p.x * s + p.y * c)
     }
     val lengthM = rotate(teeL).y - rotate(greenL).y
-    val greenY = h * 0.17f
-    val teeY = h * 0.90f
+    // Green más abajo y hoyo más al centro: en pantalla redonda el green y el
+    // lado derecho del fairway se recortaban con el bisel.
+    val greenY = h * 0.22f
+    val teeY = h * 0.88f
     val scale = (teeY - greenY) / lengthM
-    val cx = w * 0.70f          // hoyo centrado en la mitad derecha
+    val cx = w * 0.65f          // hoyo centrado en la mitad derecha
     val cy = (teeY + greenY) / 2f
     fun toScreen(p: Offset): Offset {
         val r = rotate(p)
@@ -79,7 +91,7 @@ fun DrawScope.drawMiniHole(hole: WHole, feat: WFeatures, userLat: Double?, userL
     }
     val teeP = Offset(cx, teeY)
     val greenP = Offset(cx, greenY)
-    val gr = min(w, h) * 0.13f
+    val gr = min(w, h) * 0.115f
 
     // ---- Fairway curvo (dogleg) como Bézier cuadrática ----
     val p0 = teeP
@@ -144,17 +156,21 @@ fun DrawScope.drawMiniHole(hole: WHole, feat: WFeatures, userLat: Double?, userL
 
     // ---- Agua ----
     feat.water?.let { wa ->
-        val c = bez(wa.t) + perp(wa.t) * wa.side * (fairwayW * 0.5f + w * 0.09f * wa.w)
         val pw = w * 0.13f * wa.w
         val ph = w * 0.095f * wa.h
+        val c = clampInsideBezel(
+            bez(wa.t) + perp(wa.t) * wa.side * (fairwayW * 0.5f + w * 0.09f * wa.w), pw
+        )
         drawOval(WaterDeep, topLeft = Offset(c.x - pw, c.y - ph + 4f), size = Size(pw * 2, ph * 2))
         drawOval(WaterBlue, topLeft = Offset(c.x - pw, c.y - ph), size = Size(pw * 2, ph * 2))
     }
 
     // ---- Bunkers ----
     feat.bunkers.forEach { b ->
-        val c = bez(b.t) + perp(b.t) * b.side * (fairwayW * 0.5f + w * 0.05f * b.size)
         val br = w * 0.055f * b.size
+        val c = clampInsideBezel(
+            bez(b.t) + perp(b.t) * b.side * (fairwayW * 0.5f + w * 0.05f * b.size), br
+        )
         drawOval(SandShadow, topLeft = Offset(c.x - br, c.y - br * 0.55f + 3f), size = Size(br * 2f, br * 1.1f))
         drawOval(Sand, topLeft = Offset(c.x - br, c.y - br * 0.55f), size = Size(br * 2f, br * 1.1f))
     }

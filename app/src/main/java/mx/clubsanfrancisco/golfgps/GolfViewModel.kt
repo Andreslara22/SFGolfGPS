@@ -189,6 +189,15 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
     var units by mutableStateOf(Units.YARDS)
     var themeMode by mutableStateOf(ThemeMode.SYSTEM)
 
+    // --- Juegos (Skins / Match Play / Stableford): opcionales, apagados
+    // hasta que el usuario los active con el botón del Scorecard. ---
+    var gamesEnabled by mutableStateOf(false); private set
+
+    fun toggleGames() {
+        gamesEnabled = !gamesEnabled
+        saveState()
+    }
+
     init {
         loadState()
         if (players.isEmpty()) players.add(Player("Player 1"))
@@ -760,6 +769,7 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
             .putString("flags", flags.joinToString(","))
             .putString("units", units.name)
             .putString("theme", themeMode.name)
+            .putBoolean("games", gamesEnabled)
             .putString("history", historyJson.toString())
             .putLong("stateTs", stateTs)
             .apply()
@@ -768,6 +778,7 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
     private fun loadState() {
         units = runCatching { Units.valueOf(prefs.getString("units", "YARDS")!!) }.getOrDefault(Units.YARDS)
         themeMode = runCatching { ThemeMode.valueOf(prefs.getString("theme", "SYSTEM")!!) }.getOrDefault(ThemeMode.SYSTEM)
+        gamesEnabled = prefs.getBoolean("games", false)
 
         prefs.getString("flags", null)?.split(",")?.mapNotNull { it.toIntOrNull() }
             ?.takeIf { it.size == 18 }

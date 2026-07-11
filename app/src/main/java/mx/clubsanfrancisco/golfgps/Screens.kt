@@ -746,6 +746,7 @@ private fun scoreColor(diff: Int): Color = when {
 @Composable
 private fun ScorecardScreen(vm: GolfViewModel) {
     var showFinishDialog by remember { mutableStateOf(false) }
+    var showGamesInfo by remember { mutableStateOf(false) }
     val dateFmt = remember { SimpleDateFormat("MMM d · h:mm a", Locale.US) }
     val context = LocalContext.current
     val anyScores = vm.players.any { it.playedHoles() > 0 }
@@ -848,10 +849,41 @@ private fun ScorecardScreen(vm: GolfViewModel) {
                 Spacer(Modifier.height(14.dp))
             }
 
-            // ---- Juegos: Skins + Match Play ----
+            // ---- Juegos: Skins + Match Play + Stableford (opcionales) ----
             if (vm.players.size >= 2) {
-                Text("🏆 Games", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(8.dp))
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "🏆 Games",
+                        Modifier.weight(1f),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    TextButton(onClick = { showGamesInfo = true }) {
+                        Text("ⓘ ¿Cómo funcionan?", fontSize = 12.sp)
+                    }
+                }
+                Spacer(Modifier.height(4.dp))
+                if (!vm.gamesEnabled) {
+                    Card(
+                        Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+                            Text(
+                                "Skins y puntos (Stableford) se calculan solos con los golpes " +
+                                    "que ya anotas. Actívalos solo si los van a jugar.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Button(
+                                onClick = { vm.toggleGames() },
+                                shape = RoundedCornerShape(12.dp)
+                            ) { Text("🎲 Activar Skins y Puntos") }
+                        }
+                    }
+                } else {
                 Card(
                     Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
@@ -955,7 +987,15 @@ private fun ScorecardScreen(vm: GolfViewModel) {
                                 )
                             }
                         }
+                        TextButton(onClick = { vm.toggleGames() }) {
+                            Text(
+                                "Desactivar juegos",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
+                }
                 }
                 Spacer(Modifier.height(14.dp))
             }
@@ -1000,6 +1040,31 @@ private fun ScorecardScreen(vm: GolfViewModel) {
             Spacer(Modifier.height(8.dp))
         }
         item { Spacer(Modifier.height(24.dp)) }
+    }
+
+    if (showGamesInfo) {
+        AlertDialog(
+            onDismissRequest = { showGamesInfo = false },
+            title = { Text("🏆 Skins y Puntos") },
+            text = {
+                Text(
+                    "SKINS — cada hoyo vale 1 skin y se lo lleva quien haga el menor " +
+                        "score del hoyo, solo si gana en solitario. Si hay empate, ese " +
+                        "skin se acarrea y el siguiente hoyo vale más. Gana quien junte " +
+                        "más skins.\n\n" +
+                        "PUNTOS (Stableford) — cada hoyo da puntos según tu score neto " +
+                        "con handicap: birdie 3 · par 2 · bogey 1 · doble bogey o peor 0. " +
+                        "El handicap de cada jugador (se ajusta en Players) reparte " +
+                        "golpes de ventaja en los hoyos más difíciles. Gana quien sume " +
+                        "más puntos.\n\n" +
+                        "Los dos se calculan solos con los golpes que ya anotas — no hay " +
+                        "que capturar nada extra."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showGamesInfo = false }) { Text("Entendido") }
+            }
+        )
     }
 
     if (showFinishDialog) {
