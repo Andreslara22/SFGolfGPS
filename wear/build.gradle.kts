@@ -11,8 +11,8 @@ android {
         applicationId = "mx.clubsanfrancisco.golfgps"
         minSdk = 30
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
     }
     // Misma llave fija que el módulo app (updates sin desinstalar).
     signingConfigs {

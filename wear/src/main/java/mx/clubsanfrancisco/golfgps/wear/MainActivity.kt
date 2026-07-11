@@ -32,7 +32,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -369,7 +371,10 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                     return@Scaffold
                 }
                 val hole = WearCourse.holes[holeIdx]
-                val feat = wearFeatures[hole.number] ?: WFeatures(0f, emptyList())
+                // Ilustración real del hoyo (la misma del teléfono).
+                val artBmp = ImageBitmap.imageResource(
+                    id = WearArt.ids[(hole.number - 1).coerceIn(0, 17)]
+                )
                 // Ajuste por pin del día (sincronizado desde el cel):
                 // frente ≈ -depth/4 · fondo ≈ +depth/4
                 val flag = flags.getOrNull(holeIdx) ?: -1
@@ -390,7 +395,7 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                 androidx.compose.foundation.layout.Box(
                     Modifier
                         .fillMaxSize()
-                        .drawBehind { drawMiniHole(hole, feat, lat, lng, flag) }
+                        .drawBehind { drawHoleArt(hole, artBmp, lat, lng, flag) }
                         .pointerInput(Unit) {
                             var total = 0f
                             detectHorizontalDragGestures(
