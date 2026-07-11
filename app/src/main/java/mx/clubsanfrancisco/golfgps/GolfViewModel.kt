@@ -191,12 +191,18 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
     var themeMode by mutableStateOf(ThemeMode.SYSTEM)
     var language by mutableStateOf(AppLanguage.ES)
 
-    // --- Juegos (Skins / Match Play / Stableford): opcionales, apagados
-    // hasta que el usuario los active con el botón del Scorecard. ---
-    var gamesEnabled by mutableStateOf(false); private set
+    // --- Juegos opcionales, cada uno con su botón en el Scorecard:
+    // Puntos (Stableford) y Skins (+ Match Play). Apagados por defecto. ---
+    var skinsEnabled by mutableStateOf(false); private set
+    var pointsEnabled by mutableStateOf(false); private set
 
-    fun toggleGames() {
-        gamesEnabled = !gamesEnabled
+    fun toggleSkins() {
+        skinsEnabled = !skinsEnabled
+        saveState()
+    }
+
+    fun togglePoints() {
+        pointsEnabled = !pointsEnabled
         saveState()
     }
 
@@ -800,7 +806,8 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
             .putString("units", units.name)
             .putString("theme", themeMode.name)
             .putString("lang", language.name)
-            .putBoolean("games", gamesEnabled)
+            .putBoolean("skinsOn", skinsEnabled)
+            .putBoolean("pointsOn", pointsEnabled)
             .putString("history", historyJson.toString())
             .putLong("stateTs", stateTs)
             .apply()
@@ -810,7 +817,9 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
         units = runCatching { Units.valueOf(prefs.getString("units", "YARDS")!!) }.getOrDefault(Units.YARDS)
         themeMode = runCatching { ThemeMode.valueOf(prefs.getString("theme", "SYSTEM")!!) }.getOrDefault(ThemeMode.SYSTEM)
         language = runCatching { AppLanguage.valueOf(prefs.getString("lang", "ES")!!) }.getOrDefault(AppLanguage.ES)
-        gamesEnabled = prefs.getBoolean("games", false)
+        val legacyGames = prefs.getBoolean("games", false)   // flag viejo, cuando era un solo botón
+        skinsEnabled = prefs.getBoolean("skinsOn", legacyGames)
+        pointsEnabled = prefs.getBoolean("pointsOn", legacyGames)
 
         prefs.getString("flags", null)?.split(",")?.mapNotNull { it.toIntOrNull() }
             ?.takeIf { it.size == 18 }

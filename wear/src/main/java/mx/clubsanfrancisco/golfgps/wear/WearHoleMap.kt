@@ -71,6 +71,10 @@ fun DrawScope.drawHoleArt(
     val s = (teeY - greenY) / sqrt(vx * vx + vy * vy)
     val theta = (-PI / 2 - atan2(vy.toDouble(), vx.toDouble())).toFloat()
     val teeP = Offset(cx, teeY)
+    // El lienzo del arte no alcanza a cubrir el borde izquierdo de la pantalla;
+    // pintar primero todo con el crema de fondo del arte evita el corte duro
+    // contra negro que se veía junto a las distancias.
+    drawRect(ArtPaper)
     withTransform({ rotate(degrees = theta * 180f / PI.toFloat(), pivot = teeP) }) {
         drawImage(
             image = art,
@@ -86,7 +90,7 @@ fun DrawScope.drawHoleArt(
     // Scrims: izquierda (números B/C/F), arriba (encabezado) y abajo (golpes).
     drawRect(
         brush = Brush.horizontalGradient(
-            0f to Color(0xF2000000), 0.34f to Color(0xB3000000), 0.62f to Color.Transparent
+            0f to Color(0xE6000000), 0.32f to Color(0xA6000000), 0.60f to Color.Transparent
         )
     )
     drawRect(brush = Brush.verticalGradient(0f to Color(0xA6000000), 0.15f to Color.Transparent))
@@ -154,6 +158,7 @@ fun DrawScope.drawHoleArt(
 }
 
 // Paleta pensada para fundirse sobre el negro del reloj (más viva que la del teléfono).
+private val ArtPaper = Color(0xFFEBDFC6)   // fondo crema de las ilustraciones
 private val Rough = Color(0xFF26402B)
 private val Fairway = Color(0xFF4F9350)
 private val FairwayStripe = Color(0xFF579A57)

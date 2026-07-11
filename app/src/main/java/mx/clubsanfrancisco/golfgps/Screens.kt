@@ -970,7 +970,9 @@ private fun ScorecardScreen(vm: GolfViewModel) {
                     }
                 }
                 Spacer(Modifier.height(4.dp))
-                if (!vm.gamesEnabled) {
+
+                // ---- Puntos (Stableford + Match Play), arriba de Skins ----
+                if (!vm.pointsEnabled) {
                     Card(
                         Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(16.dp),
@@ -978,15 +980,103 @@ private fun ScorecardScreen(vm: GolfViewModel) {
                     ) {
                         Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
                             Text(
-                                str.gamesOffHint,
+                                str.pointsOffHint,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Spacer(Modifier.height(8.dp))
                             Button(
-                                onClick = { vm.toggleGames() },
+                                onClick = { vm.togglePoints() },
                                 shape = RoundedCornerShape(12.dp)
-                            ) { Text(str.gamesEnableBtn) }
+                            ) { Text(str.pointsEnableBtn) }
+                        }
+                    }
+                } else {
+                    Card(
+                        Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    ) {
+                        Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                            Text(
+                                str.stablefordTitle,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            val pts = vm.players.map { it.stablefordPoints() }
+                            val best = pts.max()
+                            vm.players.forEachIndexed { i, p ->
+                                Row(
+                                    Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        (if (pts[i] == best && best > 0) "👑 " else "") +
+                                            p.name.take(12) + "  · hcp ${p.hcp}",
+                                        Modifier.weight(1f),
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 14.sp
+                                    )
+                                    Text(
+                                        "${pts[i]} pts",
+                                        fontWeight = FontWeight.Black,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                            if (vm.players.all { it.hcp == 0 }) {
+                                Text(
+                                    str.stablefordHint,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            vm.matchPlayStatus(vm.language == AppLanguage.EN)?.let { status ->
+                                Spacer(Modifier.height(10.dp))
+                                Text(
+                                    "MATCH PLAY",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    status,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Black,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            TextButton(onClick = { vm.togglePoints() }) {
+                                Text(
+                                    str.pointsDisableBtn,
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+
+                // ---- Skins ----
+                if (!vm.skinsEnabled) {
+                    Card(
+                        Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+                            Text(
+                                str.skinsOffHint,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Button(
+                                onClick = { vm.toggleSkins() },
+                                shape = RoundedCornerShape(12.dp)
+                            ) { Text(str.skinsEnableBtn) }
                         }
                     }
                 } else {
@@ -1074,63 +1164,9 @@ private fun ScorecardScreen(vm: GolfViewModel) {
                             }
                         }
 
-                        vm.matchPlayStatus(vm.language == AppLanguage.EN)?.let { status ->
-                            Spacer(Modifier.height(10.dp))
+                        TextButton(onClick = { vm.toggleSkins() }) {
                             Text(
-                                "MATCH PLAY",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                status,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Black,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-
-                        // ---- Stableford con handicap: puntos netos por hoyo ----
-                        if (vm.players.any { it.playedHoles() > 0 }) {
-                            Spacer(Modifier.height(10.dp))
-                            Text(
-                                str.stablefordTitle,
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            val pts = vm.players.map { it.stablefordPoints() }
-                            val best = pts.max()
-                            vm.players.forEachIndexed { i, p ->
-                                Row(
-                                    Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        (if (pts[i] == best && best > 0) "👑 " else "") +
-                                            p.name.take(12) + "  · hcp ${p.hcp}",
-                                        Modifier.weight(1f),
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 14.sp
-                                    )
-                                    Text(
-                                        "${pts[i]} pts",
-                                        fontWeight = FontWeight.Black,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                }
-                            }
-                            if (vm.players.all { it.hcp == 0 }) {
-                                Text(
-                                    str.stablefordHint,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                        TextButton(onClick = { vm.toggleGames() }) {
-                            Text(
-                                str.gamesDisableBtn,
+                                str.skinsDisableBtn,
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

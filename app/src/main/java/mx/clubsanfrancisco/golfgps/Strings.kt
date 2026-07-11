@@ -42,9 +42,12 @@ interface AppStrings {
     val roundStats: String
     val games: String
     val gamesHowTo: String
-    val gamesOffHint: String
-    val gamesEnableBtn: String
-    val gamesDisableBtn: String
+    val pointsOffHint: String
+    val pointsEnableBtn: String
+    val pointsDisableBtn: String
+    val skinsOffHint: String
+    val skinsEnableBtn: String
+    val skinsDisableBtn: String
     val gamesInfoTitle: String
     val gamesInfoBody: String
     val gamesInfoOk: String
@@ -155,10 +158,14 @@ object StringsEs : AppStrings {
     override val roundStats = "🎯 Stats de la ronda"
     override val games = "🏆 Juegos"
     override val gamesHowTo = "ⓘ ¿Cómo funcionan?"
-    override val gamesOffHint = "Skins y puntos (Stableford) se calculan solos con los golpes " +
-        "que ya anotas. Actívalos solo si los van a jugar."
-    override val gamesEnableBtn = "🎲 Activar Skins y Puntos"
-    override val gamesDisableBtn = "Desactivar juegos"
+    override val pointsOffHint = "Los puntos (Stableford) se calculan solos con los golpes que " +
+        "ya anotas y el handicap de cada jugador. Actívalos solo si los van a jugar."
+    override val pointsEnableBtn = "🎯 Activar Puntos (Stableford)"
+    override val pointsDisableBtn = "Desactivar puntos"
+    override val skinsOffHint = "Cada hoyo vale 1 skin para quien lo gane en solitario; los " +
+        "empates se acarrean al siguiente. Actívalos solo si los van a jugar."
+    override val skinsEnableBtn = "💰 Activar Skins"
+    override val skinsDisableBtn = "Desactivar skins"
     override val gamesInfoTitle = "🏆 Skins y Puntos"
     override val gamesInfoBody =
         "SKINS — cada hoyo vale 1 skin y se lo lleva quien haga el menor " +
@@ -283,10 +290,14 @@ object StringsEn : AppStrings {
     override val roundStats = "🎯 Round stats"
     override val games = "🏆 Games"
     override val gamesHowTo = "ⓘ How do they work?"
-    override val gamesOffHint = "Skins and points (Stableford) are computed automatically from " +
-        "the strokes you already enter. Turn them on only if you're playing them."
-    override val gamesEnableBtn = "🎲 Enable Skins & Points"
-    override val gamesDisableBtn = "Disable games"
+    override val pointsOffHint = "Points (Stableford) are computed automatically from the " +
+        "strokes you already enter and each player's handicap. Turn them on only if you're playing them."
+    override val pointsEnableBtn = "🎯 Enable Points (Stableford)"
+    override val pointsDisableBtn = "Disable points"
+    override val skinsOffHint = "Each hole is worth 1 skin, won by whoever takes the hole " +
+        "outright; ties carry over to the next. Turn them on only if you're playing them."
+    override val skinsEnableBtn = "💰 Enable Skins"
+    override val skinsDisableBtn = "Disable skins"
     override val gamesInfoTitle = "🏆 Skins & Points"
     override val gamesInfoBody =
         "SKINS — every hole is worth 1 skin, won by whoever shoots the " +
