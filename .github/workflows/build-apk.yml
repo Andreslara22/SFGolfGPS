@@ -11,6 +11,11 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # El contexto `secrets` no se permite en el `if` de un paso; se expone
+      # como variable de entorno del job para poder condicionar la firma.
+      KEYSTORE_B64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+      KEYSTORE_PW: ${{ secrets.SIGNING_KEY_PASSWORD }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -35,10 +40,7 @@ jobs:
       # La llave de subida NO está en el repo (es público). Se reconstruye desde
       # los secretos del repo: Settings → Secrets and variables → Actions.
       - name: Preparar llave de firma
-        if: ${{ secrets.SIGNING_KEYSTORE_BASE64 != '' }}
-        env:
-          KEYSTORE_B64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
-          KEYSTORE_PW: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        if: env.KEYSTORE_B64 != ''
         run: |
           echo "$KEYSTORE_B64" | base64 -d > signing/sfgolf-release.keystore
           printf '%s' "$KEYSTORE_PW" > signing/release-password.txt
