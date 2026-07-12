@@ -24,14 +24,23 @@ android {
             keyAlias = "sfgolf"
             keyPassword = "android"
         }
-        // Llave de SUBIDA (upload key) para Google Play. Con Play App Signing,
-        // Google guarda la llave real de firma; esta solo firma lo que subes,
-        // así que puede vivir en el repo del club sin comprometer las descargas.
+        // Llave de release. Si el CI dejó signing/release-password.txt (main la
+        // reconstruye desde los secretos SIGNING_KEYSTORE_BASE64 y
+        // SIGNING_KEY_PASSWORD), se usa esa; si no, cae a la upload key del repo
+        // (misma firma que las apps ya instaladas en los dispositivos).
         create("release") {
-            storeFile = rootProject.file("signing/sfgolf-upload.jks")
-            storePassword = "sanfrancisco2026"
-            keyAlias = "sfgolf-upload"
-            keyPassword = "sanfrancisco2026"
+            val pwFile = rootProject.file("signing/release-password.txt")
+            if (pwFile.exists()) {
+                storeFile = rootProject.file("signing/sfgolf-release.keystore")
+                storePassword = pwFile.readText().trim()
+                keyAlias = "sfgolf"
+                keyPassword = pwFile.readText().trim()
+            } else {
+                storeFile = rootProject.file("signing/sfgolf-upload.jks")
+                storePassword = "sanfrancisco2026"
+                keyAlias = "sfgolf-upload"
+                keyPassword = "sanfrancisco2026"
+            }
         }
     }
 

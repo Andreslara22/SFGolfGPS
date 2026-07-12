@@ -11,6 +11,7 @@ android {
         applicationId = "mx.clubsanfrancisco.golfgps"
         minSdk = 30
         targetSdk = 34
+        // Play Store exige versionCode distinto al del módulo app (mismo paquete).
         versionCode = 3
         versionName = "1.2"
     }
@@ -22,12 +23,21 @@ android {
             keyAlias = "sfgolf"
             keyPassword = "android"
         }
-        // Misma llave de release que el módulo app (ver app/build.gradle.kts).
+        // Misma llave de release que el módulo app (ver app/build.gradle.kts):
+        // la de los secretos del CI si existe, si no la upload key del repo.
         create("release") {
-            storeFile = rootProject.file("signing/sfgolf-upload.jks")
-            storePassword = "sanfrancisco2026"
-            keyAlias = "sfgolf-upload"
-            keyPassword = "sanfrancisco2026"
+            val pwFile = rootProject.file("signing/release-password.txt")
+            if (pwFile.exists()) {
+                storeFile = rootProject.file("signing/sfgolf-release.keystore")
+                storePassword = pwFile.readText().trim()
+                keyAlias = "sfgolf"
+                keyPassword = pwFile.readText().trim()
+            } else {
+                storeFile = rootProject.file("signing/sfgolf-upload.jks")
+                storePassword = "sanfrancisco2026"
+                keyAlias = "sfgolf-upload"
+                keyPassword = "sanfrancisco2026"
+            }
         }
     }
     buildTypes {

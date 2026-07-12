@@ -102,7 +102,7 @@ object ScorecardImage {
 
         // ---- Encabezado ----
         c.drawRect(0f, 0f, W.toFloat(), titleH, paint(1f, GREEN, false).apply { style = Paint.Style.FILL })
-        c.drawText("⛳ SF Golf GPS", PAD, 74f, paint(52f, WHITE, true))
+        c.drawText("⛳ San Fra Golf", PAD, 74f, paint(52f, WHITE, true))
         c.drawText(CourseData.CLUB_NAME + " · Par ${CourseData.totalPar}", PAD, 116f, paint(30f, WHITE, false))
         val en = vm.language == AppLanguage.EN
         val fecha = if (en)
