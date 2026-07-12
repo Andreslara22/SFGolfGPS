@@ -33,7 +33,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -59,7 +61,6 @@ import kotlin.math.roundToInt
 
 private val Mint = Color(0xFF7ADFA8)
 private val Dim = Color(0xFF9BB8A8)
-private val Amber = Color(0xFFF3B61F)
 
 // Data Layer: snapshot completo de la ronda (mismo formato que la app de teléfono).
 private const val STATE_PATH = "/round/state"
@@ -84,13 +85,6 @@ class WPlayer(name0: String) {
     val clubs = mutableStateListOf<Int>().apply { addAll(defaultClubYards) }
 }
 
-// Colores por resultado — SOLO se usan en el scorecard.
-private fun scoreColor(diff: Int): Color = when {
-    diff <= -2 -> Color(0xFFF0912B)   // eagle o mejor
-    diff == -1 -> Color(0xFF4DA3FF)   // birdie
-    diff == 0 -> Color(0xFFF3B61F)    // par
-    else -> Color.White               // bogey+
-}
 
 class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
 
@@ -261,6 +255,14 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
             .putBoolean("auto", auto)
             .putString("flags", flags.joinToString(","))
             .putLong("stateTs", stateTs)
+            // Distancia actual al centro del green (para tile/complicación).
+            .putInt("dist", run {
+                val h = WearCourse.holes[holeIdx]
+                val la = lat; val lo = lng
+                if (la != null && lo != null)
+                    meters(la, lo, h.greenLat, h.greenLng).roundToInt() else -1
+            })
+            .putLong("distTs", System.currentTimeMillis())
             .apply()
         // Refresca el tile y la complicación de la carátula con el hoyo/golpes actuales.
         runCatching {
@@ -378,25 +380,31 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                     return@Scaffold
                 }
                 val hole = WearCourse.holes[holeIdx]
-                val feat = wearFeatures[hole.number] ?: WFeatures(0f, emptyList())
+                // Ilustración real del hoyo (la misma del teléfono).
+                val artBmp = ImageBitmap.imageResource(
+                    id = WearArt.ids[(hole.number - 1).coerceIn(0, 17)]
+                )
                 // Ajuste por pin del día (sincronizado desde el cel):
                 // frente ≈ -depth/4 · fondo ≈ +depth/4
                 val flag = flags.getOrNull(holeIdx) ?: -1
                 val pinShift = when (flag) { 0 -> -hole.depthM / 4.0; 2 -> hole.depthM / 4.0; else -> 0.0 }
-                val distM = if (lat != null && lng != null)
-                    (meters(lat!!, lng!!, hole.greenLat, hole.greenLng) + pinShift).coerceAtLeast(0.0)
-                    else null
+                // rawM = al centro real del green · distM = al pin del día.
+                // F/B son los bordes FIJOS del green (medidos en satélite);
+                // solo el número grande sigue al pin.
+                val rawM = if (lat != null && lng != null)
+                    meters(lat!!, lng!!, hole.greenLat, hole.greenLng) else null
+                val distM = rawM?.plus(pinShift)?.coerceAtLeast(0.0)
                 val half = hole.depthM / 2.0
                 val center = distM?.let { distVal(it) }
-                val front = distM?.let { distVal((it - half).coerceAtLeast(0.0)) }
-                val back = distM?.let { distVal(it + half) }
+                val front = rawM?.let { distVal((it - half).coerceAtLeast(0.0)) }
+                val back = rawM?.let { distVal(it + half) }
                 val player = wplayers.getOrNull(activePlayer)
                 val strokeVal = player?.strokes?.getOrNull(holeIdx) ?: 0
 
                 androidx.compose.foundation.layout.Box(
                     Modifier
                         .fillMaxSize()
-                        .drawBehind { drawMiniHole(hole, feat, lat, lng, flag) }
+                        .drawBehind { drawHoleArt(hole, artBmp, lat, lng, flag) }
                         .pointerInput(Unit) {
                             var total = 0f
                             detectHorizontalDragGestures(
@@ -433,7 +441,7 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                                 Text("‹", fontSize = 15.sp, color = Dim)
                                 Spacer(Modifier.width(6.dp))
                                 Text(
-                                    "HOLE ${hole.number}",
+                                    "HOYO ${hole.number}",
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = if (auto) Mint else Color.White
@@ -450,7 +458,7 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                                     "▸ ${player.name}",
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Amber,
+                                    color = Color.White,
                                     modifier = Modifier.clickable { cyclePlayer() }
                                 )
                             }
@@ -472,7 +480,7 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                                 )
                                 Text(
                                     center?.toString() ?: (if (granted) "– –" else "GPS?"),
-                                    fontSize = 42.sp, fontWeight = FontWeight.Black, color = Amber
+                                    fontSize = 42.sp, fontWeight = FontWeight.Black, color = Color.White
                                 )
                                 Text(
                                     front?.toString() ?: "–",
@@ -539,8 +547,8 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
             ) {
                 item {
                     Text(
-                        "SCORECARD" + if (wplayers.size > 1) " · ▸ ${p?.name ?: ""}" else "",
-                        fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Amber,
+                        "TARJETA" + if (wplayers.size > 1) " · ▸ ${p?.name ?: ""}" else "",
+                        fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White,
                         modifier = Modifier.clickable { cyclePlayer() }
                     )
                 }
@@ -561,7 +569,7 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                         Text(
                             if (s > 0) "$s" else "–",
                             fontSize = 15.sp, fontWeight = FontWeight.Bold,
-                            color = if (s > 0) scoreColor(s - h.par) else Dim
+                            color = if (s > 0) Color.White else Dim
                         )
                     }
                 }

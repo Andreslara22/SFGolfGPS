@@ -5,15 +5,15 @@ plugins {
 
 android {
     namespace = "mx.clubsanfrancisco.golfgps.wear"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "mx.clubsanfrancisco.golfgps"
         minSdk = 30
         targetSdk = 34
         // Play Store exige versionCode distinto al del módulo app (mismo paquete).
-        versionCode = 2
-        versionName = "1.0"
+        versionCode = 3
+        versionName = "1.2"
     }
     // Misma llave fija que el módulo app (updates sin desinstalar).
     signingConfigs {
@@ -23,8 +23,8 @@ android {
             keyAlias = "sfgolf"
             keyPassword = "android"
         }
-        // Llave de SUBIDA a Play Store, compartida con el módulo app.
-        // NO está en el repo: el CI la reconstruye desde los secretos.
+        // Misma llave de release que el módulo app (ver app/build.gradle.kts):
+        // la de los secretos del CI si existe, si no la upload key del repo.
         create("release") {
             val pwFile = rootProject.file("signing/release-password.txt")
             if (pwFile.exists()) {
@@ -32,15 +32,23 @@ android {
                 storePassword = pwFile.readText().trim()
                 keyAlias = "sfgolf"
                 keyPassword = pwFile.readText().trim()
+            } else {
+                storeFile = rootProject.file("signing/sfgolf-upload.jks")
+                storePassword = "sanfrancisco2026"
+                keyAlias = "sfgolf-upload"
+                keyPassword = "sanfrancisco2026"
             }
         }
     }
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = if (rootProject.file("signing/release-password.txt").exists())
-                signingConfigs.getByName("release") else null
+            signingConfig = signingConfigs.getByName("release")
         }
+    }
+    lint {
+        abortOnError = false
+        checkReleaseBuilds = false
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

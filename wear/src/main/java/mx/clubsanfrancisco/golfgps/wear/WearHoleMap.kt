@@ -4,20 +4,161 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import kotlin.math.PI
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.min
+import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
 
+/** Ilustraciones por hoyo (las mismas del teléfono, trazadas del satélite). */
+object WearArt {
+    val ids = intArrayOf(
+        R.drawable.hole_1, R.drawable.hole_2, R.drawable.hole_3,
+        R.drawable.hole_4, R.drawable.hole_5, R.drawable.hole_6,
+        R.drawable.hole_7, R.drawable.hole_8, R.drawable.hole_9,
+        R.drawable.hole_10, R.drawable.hole_11, R.drawable.hole_12,
+        R.drawable.hole_13, R.drawable.hole_14, R.drawable.hole_15,
+        R.drawable.hole_16, R.drawable.hole_17, R.drawable.hole_18,
+    )
+}
+
+// Anclajes del arte: en las ilustraciones 2-18 el tee y el green caen en los
+// mismos pixeles del lienzo 1000x890 (cruces de las referencias satelitales);
+// el hoyo 1 fue dibujado antes con sus propios anclajes (eje inclinado).
+private val ART_TEE_X = FloatArray(19).also { it.fill(500f) }.apply { this[1] = 526f }
+private val ART_TEE_Y = FloatArray(19).also { it.fill(788f) }.apply { this[1] = 786.8f }
+private val ART_GREEN_X = FloatArray(19).also { it.fill(500f) }.apply { this[1] = 420f }
+private val ART_GREEN_Y = FloatArray(19).also { it.fill(128f) }.apply { this[1] = 127.3f }
+
+/**
+ * Dibuja la ilustración real del hoyo (la misma del teléfono) calibrada para
+ * que el tee y el green del arte caigan en los puntos de proyección GPS del
+ * reloj. Encima: scrim oscuro a la izquierda (para las distancias), pin del
+ * día y punto GPS con línea al green.
+ */
+fun DrawScope.drawHoleArt(
+    hole: WHole,
+    art: ImageBitmap,
+    userLat: Double?,
+    userLng: Double?,
+    flag: Int = -1
+) {
+    val w = size.width
+    val h = size.height
+    val greenY = h * 0.17f
+    val teeY = h * 0.90f
+    val cx = w * 0.65f
+    val n = hole.number.coerceIn(1, 18)
+
+    // Transformación de semejanza: los anclajes del arte (tee y green) deben
+    // caer en (cx, teeY) y (cx, greenY). Para los hoyos 2-18 no hay rotación
+    // (anclajes en vertical); el hoyo 1 se rota ~9° por su eje inclinado.
+    val vx = ART_GREEN_X[n] - ART_TEE_X[n]
+    val vy = ART_GREEN_Y[n] - ART_TEE_Y[n]
+    val s = (teeY - greenY) / sqrt(vx * vx + vy * vy)
+    val theta = (-PI / 2 - atan2(vy.toDouble(), vx.toDouble())).toFloat()
+    val teeP = Offset(cx, teeY)
+    // El lienzo del arte no alcanza a cubrir el borde izquierdo de la pantalla;
+    // pintar primero todo con el crema de fondo del arte evita el corte duro
+    // contra negro que se veía junto a las distancias.
+    drawRect(ArtPaper)
+    withTransform({ rotate(degrees = theta * 180f / PI.toFloat(), pivot = teeP) }) {
+        drawImage(
+            image = art,
+            dstOffset = IntOffset(
+                (teeP.x - ART_TEE_X[n] * s).roundToInt(),
+                (teeP.y - ART_TEE_Y[n] * s).roundToInt()
+            ),
+            dstSize = IntSize((art.width * s).roundToInt(), (art.height * s).roundToInt()),
+            filterQuality = FilterQuality.High
+        )
+    }
+
+    // Scrims: izquierda (números B/C/F), arriba (encabezado) y abajo (golpes).
+    drawRect(
+        brush = Brush.horizontalGradient(
+            0f to Color(0xE6000000), 0.32f to Color(0xA6000000), 0.60f to Color.Transparent
+        )
+    )
+    drawRect(brush = Brush.verticalGradient(0f to Color(0xA6000000), 0.15f to Color.Transparent))
+    drawRect(brush = Brush.verticalGradient(0.80f to Color.Transparent, 1f to Color(0xA6000000)))
+
+    // ---- Proyección lat/lng -> pantalla (misma que el mini-mapa) ----
+    val lat0 = (hole.teeLat + hole.greenLat) / 2
+    val lng0 = (hole.teeLng + hole.greenLng) / 2
+    fun local(lat: Double, lng: Double): Offset {
+        val x = ((lng - lng0) * cos(Math.toRadians(lat0)) * 111320.0).toFloat()
+        val y = (-(lat - lat0) * 110540.0).toFloat()
+        return Offset(x, y)
+    }
+    val teeL = local(hole.teeLat, hole.teeLng)
+    val greenL = local(hole.greenLat, hole.greenLng)
+    val angle = atan2(greenL.y - teeL.y, greenL.x - teeL.x)
+    val rot = (-PI / 2 - angle).toFloat()
+    fun rotate(p: Offset): Offset {
+        val c = cos(rot); val si = sin(rot)
+        return Offset(p.x * c - p.y * si, p.x * si + p.y * c)
+    }
+    val lengthM = rotate(teeL).y - rotate(greenL).y
+    val scale = (teeY - greenY) / lengthM
+    val cy = (teeY + greenY) / 2f
+    fun toScreen(p: Offset): Offset {
+        val r = rotate(p)
+        return Offset(cx + r.x * scale, cy + r.y * scale)
+    }
+    val greenP = Offset(cx, greenY)
+    val gr = min(w, h) * 0.11f
+
+    // Pin del día (frente = abajo del green, fondo = arriba).
+    val pinColor = when (flag) {
+        0 -> Color(0xFFE85D4A)
+        1 -> Color(0xFFFFFFFF)
+        2 -> Color(0xFF5AB0FF)
+        else -> Pole
+    }
+    val pinP = when (flag) {
+        0 -> Offset(greenP.x, greenP.y + gr * 0.45f)
+        2 -> Offset(greenP.x, greenP.y - gr * 0.45f)
+        else -> greenP
+    }
+    drawCircle(Color(0x66000000), radius = 4.5f, center = pinP + Offset(1f, 1.5f))
+    drawCircle(pinColor, radius = 3.5f, center = pinP)
+
+    // ---- Jugador (GPS) + línea punteada al green ----
+    if (userLat != null && userLng != null) {
+        val pad = 10f
+        val raw = toScreen(local(userLat, userLng))
+        val user = Offset(raw.x.coerceIn(pad, w - pad), raw.y.coerceIn(pad, h - pad))
+        // sombra oscura debajo para que la línea se lea sobre el arte claro
+        drawLine(
+            Color(0x80000000), user, greenP, strokeWidth = 5f,
+            pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 9f))
+        )
+        drawLine(
+            LineLt, user, greenP, strokeWidth = 3f,
+            pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 9f))
+        )
+        drawCircle(PlayerBlue.copy(alpha = 0.28f), radius = 15f, center = user)
+        drawCircle(Pole, radius = 8f, center = user)
+        drawCircle(PlayerBlue, radius = 5.5f, center = user)
+    }
+}
+
 // Paleta pensada para fundirse sobre el negro del reloj (más viva que la del teléfono).
+private val ArtPaper = Color(0xFFEBDFC6)   // fondo crema de las ilustraciones
 private val Rough = Color(0xFF26402B)
 private val Fairway = Color(0xFF4F9350)
 private val FairwayStripe = Color(0xFF579A57)

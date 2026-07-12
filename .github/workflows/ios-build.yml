@@ -1,0 +1,77 @@
+# Compila la app de iOS en la nube (runners macOS de GitHub con Xcode 16),
+# para no depender de una Mac reciente. Produce un .ipa SIN FIRMAR que se
+# instala en el iPhone con Sideloadly/AltStore usando tu Apple ID.
+name: iOS build
+
+on:
+  push:
+    branches: ["main", "claude/**"]
+    paths: ["ios/**", ".github/workflows/ios-build.yml"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Versión de Xcode
+        run: xcodebuild -version
+
+      - name: Compilar app de iPhone (sin firma)
+        run: |
+          xcodebuild -project ios/SFGolfGPS.xcodeproj \
+            -scheme SFGolfGPS \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build
+
+      - name: Empaquetar IPA sin firmar
+        run: |
+          mkdir -p Payload
+          cp -R "build/Build/Products/Release-iphoneos/SFGolfGPS.app" Payload/
+          # La app del Watch embebida se quita del IPA: las herramientas de
+          # sideload no pueden firmarla. El Watch se instala con Xcode/TestFlight.
+          rm -rf "Payload/SFGolfGPS.app/Watch"
+          zip -qry SFGolfGPS-sin-firmar.ipa Payload
+          ls -lh SFGolfGPS-sin-firmar.ipa
+
+      - name: Subir IPA como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: SFGolfGPS-ipa
+          path: SFGolfGPS-sin-firmar.ipa
+          retention-days: 30
+
+      # Build para SIMULADOR: este .app se sube a appetize.io y la app corre
+      # en un iPhone virtual dentro del navegador (sin iPhone ni Xcode).
+      - name: Compilar app para simulador
+        run: |
+          xcodebuild -project ios/SFGolfGPS.xcodeproj \
+            -scheme SFGolfGPS \
+            -configuration Release \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build-sim \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build
+
+      # Se sube la carpeta .app directa (sin zip anidado): el zip que GitHub
+      # genera al descargar el artefacto ya trae SFGolfGPS.app en la raíz y
+      # se puede subir tal cual a appetize.io.
+      - name: Preparar build de simulador
+        run: |
+          mkdir -p sim-upload
+          cp -R build-sim/Build/Products/Release-iphonesimulator/SFGolfGPS.app sim-upload/
+          # La app del Watch anidada confunde el detector de appetize.io y no
+          # funciona en simulador web de todos modos.
+          rm -rf "sim-upload/SFGolfGPS.app/Watch"
+
+      - name: Subir build de simulador como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: SFGolfGPS-simulador
+          path: sim-upload
+          retention-days: 30

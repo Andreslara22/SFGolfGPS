@@ -26,8 +26,23 @@ class RoundTileService : TileService() {
         val hole = prefs.getInt("hole", 0).coerceIn(0, 17) + 1
         val active = prefs.getInt("active", 0)
         val name = prefs.getString("names", null)?.split(SEP_TILE)?.getOrNull(active) ?: ""
-        val strokes = prefs.getString("scores", null)?.split(SEP_TILE)?.getOrNull(active)
-            ?.split(",")?.mapNotNull { it.toIntOrNull() }?.getOrNull(hole - 1) ?: 0
+        val allStrokes = prefs.getString("scores", null)?.split(SEP_TILE)?.getOrNull(active)
+            ?.split(",")?.mapNotNull { it.toIntOrNull() } ?: emptyList()
+        val strokes = allStrokes.getOrNull(hole - 1) ?: 0
+        // Resumen de la ronda del jugador activo (OUT/IN/TOTAL vs par).
+        val out = (0..8).sumOf { allStrokes.getOrNull(it) ?: 0 }
+        val inn = (9..17).sumOf { allStrokes.getOrNull(it) ?: 0 }
+        val rel = allStrokes.withIndex().sumOf { (i, v) ->
+            if (v > 0) v - WearCourse.holes[i].par else 0
+        }
+        val relTxt = if (rel == 0) "E" else if (rel > 0) "+$rel" else "$rel"
+        // Distancia al green del último fix (solo si es reciente).
+        val distM = prefs.getInt("dist", -1)
+        val freshDist = System.currentTimeMillis() - prefs.getLong("distTs", 0L) < 15 * 60_000L
+        val yards = prefs.getString("units", "YARDS") != "METERS"
+        val distTxt = if (distM >= 0 && freshDist) {
+            if (yards) "${(distM * 1.09361).toInt()} yd al green" else "$distM m al green"
+        } else null
 
         val openApp = ModifiersBuilders.Clickable.Builder()
             .setId("open")
@@ -68,6 +83,17 @@ class RoundTileService : TileService() {
                     14f, 0xFF9BB8A8.toInt(), false
                 )
             )
+            .apply {
+                if (distTxt != null)
+                    addContent(text(distTxt, 16f, 0xFFFFFFFF.toInt(), true))
+                if (out + inn > 0)
+                    addContent(
+                        text(
+                            "OUT $out · IN $inn · TOTAL ${out + inn} ($relTxt)",
+                            13f, 0xFF9BB8A8.toInt(), false
+                        )
+                    )
+            }
             .build()
 
         val tile = TileBuilders.Tile.Builder()

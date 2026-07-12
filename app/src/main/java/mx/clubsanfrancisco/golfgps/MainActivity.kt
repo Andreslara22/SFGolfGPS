@@ -12,9 +12,14 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.core.content.ContextCompat
+import androidx.compose.animation.Crossfade
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 
 class MainActivity : ComponentActivity() {
@@ -66,11 +71,20 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             SFGolfTheme(mode = vm.themeMode) {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    GolfApp(vm = vm, onRequestPermission = ::requestLocation)
+                // Pantalla de inicio de marca (Yunari Studio) al abrir la app,
+                // luego cruza a la app. rememberSaveable: no se repite al girar.
+                var showSplash by rememberSaveable { mutableStateOf(true) }
+                Crossfade(targetState = showSplash, label = "splash") { splash ->
+                    if (splash) {
+                        YunariSplash(onDone = { showSplash = false })
+                    } else {
+                        Surface(
+                            modifier = Modifier.fillMaxSize(),
+                            color = MaterialTheme.colorScheme.background
+                        ) {
+                            GolfApp(vm = vm, onRequestPermission = ::requestLocation)
+                        }
+                    }
                 }
             }
         }

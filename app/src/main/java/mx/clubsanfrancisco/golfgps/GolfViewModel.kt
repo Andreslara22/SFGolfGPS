@@ -35,6 +35,7 @@ private const val SEP = ""
 
 enum class Units { YARDS, METERS }
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
+enum class AppLanguage { ES, EN }
 
 class Player(
     name: String,
@@ -188,19 +189,26 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
     // --- Settings ---
     var units by mutableStateOf(Units.YARDS)
     var themeMode by mutableStateOf(ThemeMode.SYSTEM)
+    var language by mutableStateOf(AppLanguage.ES)
 
-    // --- Juegos (Skins / Match Play / Stableford): opcionales, apagados
-    // hasta que el usuario los active con el botón del Scorecard. ---
-    var gamesEnabled by mutableStateOf(false); private set
+    // --- Juegos opcionales, cada uno con su botón en el Scorecard:
+    // Puntos (Stableford) y Skins (+ Match Play). Apagados por defecto. ---
+    var skinsEnabled by mutableStateOf(false); private set
+    var pointsEnabled by mutableStateOf(false); private set
 
-    fun toggleGames() {
-        gamesEnabled = !gamesEnabled
+    fun toggleSkins() {
+        skinsEnabled = !skinsEnabled
+        saveState()
+    }
+
+    fun togglePoints() {
+        pointsEnabled = !pointsEnabled
         saveState()
     }
 
     init {
         loadState()
-        if (players.isEmpty()) players.add(Player("Player 1"))
+        if (players.isEmpty()) players.add(Player(defaultPlayerName(1)))
         stateTs = prefs.getLong("stateTs", 0L)
 
         // Sincronización con el reloj (Data Layer): trae el último snapshot.
@@ -313,7 +321,7 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
         history.clear()
         for (i in 0 until 18) flags[i] = -1
         loadState()
-        if (players.isEmpty()) players.add(Player("Player 1"))
+        if (players.isEmpty()) players.add(Player(defaultPlayerName(1)))
         if (activePlayerIndex >= players.size) activePlayerIndex = 0
         currentHoleIndex = 0
         syncOut()
@@ -607,12 +615,36 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
     }
 
     /**
+     * Historial hoyo por hoyo de Skins (solo hoyos con golpes de todos):
+     * Triple(indice de hoyo, indice del ganador o -1 si empate, skins en juego).
+     */
+    fun skinsHistory(): List<Triple<Int, Int, Int>> {
+        val out = ArrayList<Triple<Int, Int, Int>>()
+        var pot = 0
+        for (h in 0 until 18) {
+            val scores = players.map { it.strokes[h] }
+            if (scores.isEmpty() || scores.any { it == 0 }) continue
+            pot += 1
+            val minScore = scores.min()
+            val winners = scores.withIndex().filter { it.value == minScore }
+            if (winners.size == 1) {
+                out.add(Triple(h, winners.first().index, pot))
+                pot = 0
+            } else {
+                out.add(Triple(h, -1, pot))
+            }
+        }
+        return out
+    }
+
+    /**
      * Match play clásico para exactamente 2 jugadores.
      * Devuelve el estado legible ("Andres 2 UP thru 7", "All square thru 7",
      * "Andres gana 3&2") o null si no aplica.
      */
-    fun matchPlayStatus(): String? {
+    fun matchPlayStatus(english: Boolean = false): String? {
         if (players.size != 2) return null
+        val winsWord = if (english) "wins" else "gana"
         val a = players[0]; val b = players[1]
         var diff = 0 // >0 = jugador A arriba
         var thru = 0
@@ -629,9 +661,9 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
         val leader = if (diff > 0) a.name else b.name
         val up = kotlin.math.abs(diff)
         return when {
-            decidedAt > 0 -> "$leader gana $up&${18 - decidedAt}"
+            decidedAt > 0 -> "$leader $winsWord $up&${18 - decidedAt}"
             diff == 0 -> "All square · thru $thru"
-            thru == 18 -> "$leader gana $up UP"
+            thru == 18 -> "$leader $winsWord $up UP"
             else -> "$leader $up UP · thru $thru"
         }
     }
@@ -639,7 +671,7 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
     // --- Players ---
     fun addPlayer() {
         if (players.size < 5) {
-            players.add(Player("Player ${players.size + 1}"))
+            players.add(Player(defaultPlayerName(players.size + 1)))
             syncOut()
         }
     }
@@ -741,6 +773,10 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
 
     fun setUnitsAndSave(u: Units) { units = u; syncOut() }
     fun setThemeAndSave(t: ThemeMode) { themeMode = t; saveState() }
+    fun setLanguageAndSave(l: AppLanguage) { language = l; saveState() }
+
+    private fun defaultPlayerName(i: Int) =
+        if (language == AppLanguage.EN) "Player $i" else "Jugador $i"
 
     // --- Persistence ---
     private fun saveState() {
@@ -769,7 +805,9 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
             .putString("flags", flags.joinToString(","))
             .putString("units", units.name)
             .putString("theme", themeMode.name)
-            .putBoolean("games", gamesEnabled)
+            .putString("lang", language.name)
+            .putBoolean("skinsOn", skinsEnabled)
+            .putBoolean("pointsOn", pointsEnabled)
             .putString("history", historyJson.toString())
             .putLong("stateTs", stateTs)
             .apply()
@@ -778,7 +816,10 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
     private fun loadState() {
         units = runCatching { Units.valueOf(prefs.getString("units", "YARDS")!!) }.getOrDefault(Units.YARDS)
         themeMode = runCatching { ThemeMode.valueOf(prefs.getString("theme", "SYSTEM")!!) }.getOrDefault(ThemeMode.SYSTEM)
-        gamesEnabled = prefs.getBoolean("games", false)
+        language = runCatching { AppLanguage.valueOf(prefs.getString("lang", "ES")!!) }.getOrDefault(AppLanguage.ES)
+        val legacyGames = prefs.getBoolean("games", false)   // flag viejo, cuando era un solo botón
+        skinsEnabled = prefs.getBoolean("skinsOn", legacyGames)
+        pointsEnabled = prefs.getBoolean("pointsOn", legacyGames)
 
         prefs.getString("flags", null)?.split(",")?.mapNotNull { it.toIntOrNull() }
             ?.takeIf { it.size == 18 }

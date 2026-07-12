@@ -29,9 +29,8 @@ object ScorecardImage {
     private const val INK = 0xFF1A1A1A.toInt()
     private const val GRID = 0xFFD9D9D9.toInt()
     private const val MUTED = 0xFF6B6B6B.toInt()
-    private const val BIRDIE = 0xFF2E7DD1.toInt()
-    private const val EAGLE = 0xFFE07A1F.toInt()
-    private const val BOGEY = 0xFFC0392B.toInt()
+    private const val MARK = 0xFF9BA8A0.toInt()      // aro/cuadro bajo/sobre par
+    private const val STRIPE = 0xFFF3F8F5.toInt()    // franja de filas alternas
 
     fun shareIntent(context: Context, vm: GolfViewModel): Intent? {
         val players = vm.players.toList()
@@ -48,6 +47,29 @@ object ScorecardImage {
         }
     }
 
+    /** Igual que [shareIntent] pero en PDF (una página con la tarjeta). */
+    fun sharePdfIntent(context: Context, vm: GolfViewModel): Intent? {
+        val players = vm.players.toList()
+        if (players.isEmpty()) return null
+        val bmp = render(vm, players)
+        val doc = android.graphics.pdf.PdfDocument()
+        val page = doc.startPage(
+            android.graphics.pdf.PdfDocument.PageInfo.Builder(bmp.width, bmp.height, 1).create()
+        )
+        page.canvas.drawBitmap(bmp, 0f, 0f, null)
+        doc.finishPage(page)
+        val dir = File(context.cacheDir, "shared").apply { mkdirs() }
+        val file = File(dir, "tarjeta_sfgolf.pdf")
+        FileOutputStream(file).use { doc.writeTo(it) }
+        doc.close()
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        return Intent(Intent.ACTION_SEND).apply {
+            type = "application/pdf"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+    }
+
     private fun paint(size: Float, color: Int, bold: Boolean, center: Boolean = false) =
         Paint(Paint.ANTI_ALIAS_FLAG).apply {
             textSize = size
@@ -56,17 +78,13 @@ object ScorecardImage {
             if (center) textAlign = Paint.Align.CENTER
         }
 
-    private fun scoreColor(diff: Int): Int = when {
-        diff <= -2 -> EAGLE
-        diff == -1 -> BIRDIE
-        diff == 0 -> INK
-        else -> BOGEY
-    }
-
     private const val W = 1080
     private const val PAD = 36f
-    private const val LABEL_W = 200f
+    private const val LABEL_W = 190f
     private const val ROW_H = 62f
+    /** Las columnas OUT / TOTAL son más anchas que las de hoyo (no se cortan). */
+    private const val SUM_COL = 1.45f
+    private const val FOOTER_H = 50f
 
     private fun render(vm: GolfViewModel, players: List<Player>): Bitmap {
         val n = players.size
@@ -76,7 +94,7 @@ object ScorecardImage {
         val footHeadH = 54f
         val footH = footHeadH + ROW_H * n
         // gap tras el título + entre bloques + antes del resumen = 3 gaps.
-        val height = (titleH + gap + blockH + gap + blockH + gap + footH + PAD).toInt()
+        val height = (titleH + gap + blockH + gap + blockH + gap + footH + FOOTER_H + PAD).toInt()
 
         val bmp = Bitmap.createBitmap(W, height, Bitmap.Config.ARGB_8888)
         val c = Canvas(bmp)
@@ -86,22 +104,33 @@ object ScorecardImage {
         c.drawRect(0f, 0f, W.toFloat(), titleH, paint(1f, GREEN, false).apply { style = Paint.Style.FILL })
         c.drawText("⛳ San Fra Golf", PAD, 74f, paint(52f, WHITE, true))
         c.drawText(CourseData.CLUB_NAME + " · Par ${CourseData.totalPar}", PAD, 116f, paint(30f, WHITE, false))
-        val fecha = SimpleDateFormat("EEEE d 'de' MMMM, yyyy · h:mm a", Locale("es", "MX")).format(Date())
+        val en = vm.language == AppLanguage.EN
+        val fecha = if (en)
+            SimpleDateFormat("EEEE, MMMM d, yyyy · h:mm a", Locale.US).format(Date())
+        else
+            SimpleDateFormat("EEEE d 'de' MMMM, yyyy · h:mm a", Locale("es", "MX")).format(Date())
         c.drawText(fecha.replaceFirstChar { it.uppercase() }, PAD, 150f, paint(26f, 0xFFCDE4D6.toInt(), false))
 
         var y = titleH + gap
         y = drawBlock(c, players, 0 until 9, "OUT", null, y, n)
         y += gap
-        y = drawBlock(c, players, 9 until 18, "IN", "TOT", y, n)
+        y = drawBlock(c, players, 9 until 18, "IN", "TOTAL", y, n)
         y += gap
 
         // ---- Resumen por jugador ----
-        c.drawText("Resumen", PAD, y + 36f, paint(34f, GREEN, true))
+        c.drawText(if (en) "Summary" else "Resumen", PAD, y + 36f, paint(34f, GREEN, true))
         y += footHeadH
         players.forEach { p ->
             drawSummary(c, p, y)
             y += ROW_H
         }
+
+        // ---- Pie ----
+        c.drawText(
+            "⛳ SF Golf GPS · ${CourseData.CLUB_NAME}",
+            W / 2f, y + FOOTER_H - 8f,
+            paint(22f, MUTED, false, center = true)
+        )
         return bmp
     }
 
@@ -111,53 +140,59 @@ object ScorecardImage {
         sumLabel: String, totLabel: String?, top: Float, n: Int
     ): Float {
         val extraCols = if (totLabel != null) 2 else 1  // OUT, o IN+TOTAL
-        val cols = 9 + extraCols
-        val cellW = (W - 2 * PAD - LABEL_W) / cols
+        val units = 9 + extraCols * SUM_COL
+        val cellW = (W - 2 * PAD - LABEL_W) / units
+        val sumW = cellW * SUM_COL
         val x0 = PAD
 
-        fun colX(i: Int) = x0 + LABEL_W + i * cellW
+        // Centros de columna: hoyos 0-8, luego OUT/IN y TOTAL (más anchas).
+        fun holeX(i: Int) = x0 + LABEL_W + i * cellW + cellW / 2
+        val sumX = x0 + LABEL_W + 9 * cellW + sumW / 2
+        val totX = x0 + LABEL_W + 9 * cellW + sumW + sumW / 2
 
         // Fila de hoyos (fondo verde)
         var y = top
         c.drawRect(x0, y, W - PAD, y + ROW_H, paint(1f, GREEN, false).apply { style = Paint.Style.FILL })
         c.drawText("Hoyo", x0 + 14f, y + 40f, paint(30f, WHITE, true))
         range.forEachIndexed { i, h ->
-            c.drawText("${h + 1}", colX(i) + cellW / 2, y + 40f, paint(30f, WHITE, true, center = true))
+            c.drawText("${h + 1}", holeX(i), y + 40f, paint(30f, WHITE, true, center = true))
         }
-        c.drawText(sumLabel, colX(9) + cellW / 2, y + 40f, paint(28f, WHITE, true, center = true))
-        totLabel?.let { c.drawText(it, colX(10) + cellW / 2, y + 40f, paint(28f, WHITE, true, center = true)) }
+        c.drawText(sumLabel, sumX, y + 40f, paint(28f, WHITE, true, center = true))
+        totLabel?.let { c.drawText(it, totX, y + 40f, paint(24f, WHITE, true, center = true)) }
 
         // Fila de par (fondo suave)
         y += ROW_H
         c.drawRect(x0, y, W - PAD, y + ROW_H, paint(1f, GREEN_SOFT, false).apply { style = Paint.Style.FILL })
         c.drawText("Par", x0 + 14f, y + 40f, paint(28f, MUTED, true))
         range.forEachIndexed { i, h ->
-            c.drawText("${CourseData.holes[h].par}", colX(i) + cellW / 2, y + 40f, paint(28f, MUTED, true, center = true))
+            c.drawText("${CourseData.holes[h].par}", holeX(i), y + 40f, paint(28f, MUTED, true, center = true))
         }
         val parSum = range.sumOf { CourseData.holes[it].par }
-        c.drawText("$parSum", colX(9) + cellW / 2, y + 40f, paint(28f, MUTED, true, center = true))
-        totLabel?.let { c.drawText("${CourseData.totalPar}", colX(10) + cellW / 2, y + 40f, paint(28f, MUTED, true, center = true)) }
+        c.drawText("$parSum", sumX, y + 40f, paint(28f, MUTED, true, center = true))
+        totLabel?.let { c.drawText("${CourseData.totalPar}", totX, y + 40f, paint(28f, MUTED, true, center = true)) }
 
-        // Filas por jugador
-        players.forEach { p ->
+        // Filas por jugador (franjas alternas para leer mejor)
+        players.forEachIndexed { pi, p ->
             y += ROW_H
+            if (pi % 2 == 1) {
+                c.drawRect(x0, y, W - PAD, y + ROW_H, paint(1f, STRIPE, false).apply { style = Paint.Style.FILL })
+            }
             c.drawText(p.name.take(11), x0 + 14f, y + 40f, paint(28f, INK, true))
             range.forEachIndexed { i, h ->
                 val s = p.strokes[h]
-                val cx = colX(i) + cellW / 2
+                val cx = holeX(i)
                 if (s > 0) {
-                    val diff = s - CourseData.holes[h].par
-                    drawScoreMark(c, cx, y + ROW_H / 2, diff)
-                    c.drawText("$s", cx, y + 40f, paint(30f, scoreColor(diff), true, center = true))
+                    drawScoreMark(c, cx, y + ROW_H / 2, s - CourseData.holes[h].par)
+                    c.drawText("$s", cx, y + 40f, paint(30f, INK, true, center = true))
                 } else {
                     c.drawText("·", cx, y + 40f, paint(30f, GRID, true, center = true))
                 }
             }
             val outSum = range.sumOf { p.strokes[it] }
-            c.drawText(if (outSum > 0) "$outSum" else "·", colX(9) + cellW / 2, y + 40f, paint(30f, INK, true, center = true))
+            c.drawText(if (outSum > 0) "$outSum" else "·", sumX, y + 40f, paint(30f, INK, true, center = true))
             totLabel?.let {
                 val tot = p.total()
-                c.drawText(if (tot > 0) "$tot" else "·", colX(10) + cellW / 2, y + 40f, paint(32f, GREEN, true, center = true))
+                c.drawText(if (tot > 0) "$tot" else "·", totX, y + 40f, paint(32f, GREEN, true, center = true))
             }
         }
 
@@ -168,11 +203,11 @@ object ScorecardImage {
         return y + ROW_H
     }
 
-    /** Círculo para bajo par, cuadro para sobre par (como en la app). */
+    /** Círculo para bajo par, cuadro para sobre par (como en la app), en gris neutro. */
     private fun drawScoreMark(c: Canvas, cx: Float, cy: Float, diff: Int) {
         if (diff == 0) return
         val r = 24f
-        val p = paint(1f, if (diff < 0) BIRDIE else BOGEY, false).apply {
+        val p = paint(1f, MARK, false).apply {
             style = Paint.Style.STROKE; strokeWidth = 2.5f
         }
         if (diff < 0) c.drawCircle(cx, cy, r, p)
@@ -197,6 +232,11 @@ object ScorecardImage {
             if (p.totalPutts() > 0) add("${p.totalPutts()} putts")
         }
         c.drawText(p.name.take(12), PAD, top + 40f, paint(30f, INK, true))
-        c.drawText(bits.joinToString("   ·   "), PAD + 260f, top + 40f, paint(26f, MUTED, false))
+        // El texto se encoge hasta caber en el ancho disponible (no se corta).
+        val text = bits.joinToString("  ·  ")
+        val maxW = W - PAD - (PAD + 250f)
+        val pnt = paint(26f, MUTED, false)
+        while (pnt.measureText(text) > maxW && pnt.textSize > 17f) pnt.textSize -= 1f
+        c.drawText(text, PAD + 250f, top + 40f, pnt)
     }
 }
