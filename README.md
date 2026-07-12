@@ -1,4 +1,13 @@
-# SF Golf GPS — Club de Golf San Francisco (Chihuahua)
+# San Fra Golf — Club de Golf San Francisco (Chihuahua)
+
+## Publicación en Play Store
+- **Paquete**: `mx.clubsanfrancisco.golfgps` · **Nombre**: San Fra Golf
+- **AAB firmado**: el workflow de GitHub Actions genera el artefacto `SanFraGolf-release-aab`
+  (app y reloj) en cada push a `main`, listo para subir a Play Console.
+- **Llave de subida**: `signing/sfgolf-release.keystore` (contraseña en
+  `signing/release-password.txt`). ⚠️ El repo debe permanecer **privado**.
+- **Política de privacidad**: `docs/privacidad.html` · **Eliminar cuenta**: `docs/eliminar-cuenta.html`
+  — se publican con GitHub Pages (Settings → Pages → rama `main`, carpeta `/docs`).
 
 App Android **100% nativa** (Kotlin + Jetpack Compose). Sin servicios de terceros:
 el GPS usa `LocationManager` del sistema Android y los datos del campo están

@@ -11,7 +11,8 @@ android {
         applicationId = "mx.clubsanfrancisco.golfgps"
         minSdk = 30
         targetSdk = 34
-        versionCode = 1
+        // Play Store exige versionCode distinto al del módulo app (mismo paquete).
+        versionCode = 2
         versionName = "1.0"
     }
     // Misma llave fija que el módulo app (updates sin desinstalar).
@@ -22,8 +23,20 @@ android {
             keyAlias = "sfgolf"
             keyPassword = "android"
         }
+        // Llave de SUBIDA a Play Store, compartida con el módulo app.
+        create("release") {
+            storeFile = rootProject.file("signing/sfgolf-release.keystore")
+            storePassword = rootProject.file("signing/release-password.txt").readText().trim()
+            keyAlias = "sfgolf"
+            keyPassword = rootProject.file("signing/release-password.txt").readText().trim()
+        }
     }
-    buildTypes { release { isMinifyEnabled = false } }
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
+        }
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

@@ -7,7 +7,7 @@
     <uses-feature android:name="android.hardware.location.gps" android:required="true" />
 
     <application
-        android:label="SF Golf GPS"
+        android:label="San Fra Golf"
         android:icon="@mipmap/ic_launcher"
         android:supportsRtl="true"
         android:theme="@style/Theme.SFGolf">

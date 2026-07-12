@@ -24,11 +24,20 @@ android {
             keyAlias = "sfgolf"
             keyPassword = "android"
         }
+        // Llave de SUBIDA a Play Store (Play App Signing re-firma al publicar).
+        // El repo debe permanecer PRIVADO: la contraseña vive en signing/release-password.txt.
+        create("release") {
+            storeFile = rootProject.file("signing/sfgolf-release.keystore")
+            storePassword = rootProject.file("signing/release-password.txt").readText().trim()
+            keyAlias = "sfgolf"
+            keyPassword = rootProject.file("signing/release-password.txt").readText().trim()
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
         }
     }
     compileOptions {

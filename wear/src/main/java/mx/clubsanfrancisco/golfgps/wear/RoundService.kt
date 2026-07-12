@@ -44,7 +44,7 @@ class RoundService : Service() {
 
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("SF Golf")
+            .setContentTitle("San Fra Golf")
             .setContentText("Ronda en curso")
             .setContentIntent(touch)
             .setOngoing(true)
