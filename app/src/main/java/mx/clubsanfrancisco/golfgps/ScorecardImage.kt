@@ -84,7 +84,7 @@ object ScorecardImage {
 
         // ---- Encabezado ----
         c.drawRect(0f, 0f, W.toFloat(), titleH, paint(1f, GREEN, false).apply { style = Paint.Style.FILL })
-        c.drawText("⛳ SF Golf GPS", PAD, 74f, paint(52f, WHITE, true))
+        c.drawText("⛳ San Fra Golf", PAD, 74f, paint(52f, WHITE, true))
         c.drawText(CourseData.CLUB_NAME + " · Par ${CourseData.totalPar}", PAD, 116f, paint(30f, WHITE, false))
         val fecha = SimpleDateFormat("EEEE d 'de' MMMM, yyyy · h:mm a", Locale("es", "MX")).format(Date())
         c.drawText(fecha.replaceFirstChar { it.uppercase() }, PAD, 150f, paint(26f, 0xFFCDE4D6.toInt(), false))

@@ -24,11 +24,25 @@ android {
             keyAlias = "sfgolf"
             keyPassword = "android"
         }
+        // Llave de SUBIDA a Play Store. NO está en el repo (es público): el CI la
+        // reconstruye desde los secretos SIGNING_KEYSTORE_BASE64 y SIGNING_KEY_PASSWORD.
+        create("release") {
+            val pwFile = rootProject.file("signing/release-password.txt")
+            if (pwFile.exists()) {
+                storeFile = rootProject.file("signing/sfgolf-release.keystore")
+                storePassword = pwFile.readText().trim()
+                keyAlias = "sfgolf"
+                keyPassword = pwFile.readText().trim()
+            }
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            // Sin la llave (fork o build local sin secretos) el AAB sale sin firmar.
+            signingConfig = if (rootProject.file("signing/release-password.txt").exists())
+                signingConfigs.getByName("release") else null
         }
     }
     compileOptions {
