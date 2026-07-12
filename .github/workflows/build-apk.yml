@@ -32,6 +32,17 @@ jobs:
       - name: Build debug APK
         run: gradle :app:assembleDebug :wear:assembleDebug --no-daemon 2>&1 | tee build-output.log; exit ${PIPESTATUS[0]}
 
+      # La llave de subida NO está en el repo (es público). Se reconstruye desde
+      # los secretos del repo: Settings → Secrets and variables → Actions.
+      - name: Preparar llave de firma
+        if: ${{ secrets.SIGNING_KEYSTORE_BASE64 != '' }}
+        env:
+          KEYSTORE_B64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+          KEYSTORE_PW: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        run: |
+          echo "$KEYSTORE_B64" | base64 -d > signing/sfgolf-release.keystore
+          printf '%s' "$KEYSTORE_PW" > signing/release-password.txt
+
       - name: Build release AAB (Play Store)
         run: gradle :app:bundleRelease :wear:bundleRelease --no-daemon 2>&1 | tee -a build-output.log; exit ${PIPESTATUS[0]}
 

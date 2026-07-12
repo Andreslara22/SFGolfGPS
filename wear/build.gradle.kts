@@ -24,17 +24,22 @@ android {
             keyPassword = "android"
         }
         // Llave de SUBIDA a Play Store, compartida con el módulo app.
+        // NO está en el repo: el CI la reconstruye desde los secretos.
         create("release") {
-            storeFile = rootProject.file("signing/sfgolf-release.keystore")
-            storePassword = rootProject.file("signing/release-password.txt").readText().trim()
-            keyAlias = "sfgolf"
-            keyPassword = rootProject.file("signing/release-password.txt").readText().trim()
+            val pwFile = rootProject.file("signing/release-password.txt")
+            if (pwFile.exists()) {
+                storeFile = rootProject.file("signing/sfgolf-release.keystore")
+                storePassword = pwFile.readText().trim()
+                keyAlias = "sfgolf"
+                keyPassword = pwFile.readText().trim()
+            }
         }
     }
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = if (rootProject.file("signing/release-password.txt").exists())
+                signingConfigs.getByName("release") else null
         }
     }
     compileOptions {
