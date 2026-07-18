@@ -80,6 +80,7 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.activity:activity-compose:1.8.2")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("com.google.android.gms:play-services-wearable:18.1.0")
     // Vista satelital del hoyo (Google Maps en Compose). Solo se muestra si el

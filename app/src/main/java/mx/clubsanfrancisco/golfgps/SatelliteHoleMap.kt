@@ -30,6 +30,7 @@ import com.google.android.gms.maps.model.Dash
 import com.google.android.gms.maps.model.Gap
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.LatLngBounds
+import com.google.maps.android.compose.Circle
 import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.MapProperties
 import com.google.maps.android.compose.MapType
@@ -41,6 +42,10 @@ import com.google.maps.android.compose.rememberMarkerState
 import kotlin.math.roundToInt
 
 private val MeasureBlue = Color(0xFF3D8BFF)
+private val RingWhite = Color(0x66FFFFFF)
+private val ClubGold = Color(0xF2FFD24A)
+private val FrontRed = Color(0xFFE85D4A)
+private val BackBlue = Color(0xFF5AB0FF)
 
 /**
  * ¿Hay llave de Google Maps configurada? Sin ella los mosaicos salen en gris,
@@ -57,9 +62,15 @@ fun mapsApiKeyPresent(context: Context): Boolean = runCatching {
 
 /**
  * Vista satelital real del hoyo (imágenes aéreas de Google Maps) con el mismo
- * overlay que la ilustración: tu posición, la línea al green con la distancia y
- * el cursor de medición (toca el mapa para un layup, toca de nuevo para quitar).
- * El encuadre se ajusta a tee↔green; el mapa se puede rotar y hacer paneo.
+ * overlay que la ilustración y algunos extras de rangefinder:
+ *  - orientación "green arriba" (como la ilustración),
+ *  - puntos Front / Center / Back del green con sus distancias,
+ *  - anillos de distancia desde tu posición (layups),
+ *  - anillo del palo sugerido (hasta dónde llega tu palo),
+ *  - línea al green y cursor de medición (toca para medir, toca ✕ para quitar).
+ *
+ * @param clubRangeM alcance en metros del palo sugerido (para el anillo dorado)
+ * @param clubLabel  nombre del palo sugerido (se ve al tocar el anillo)
  */
 @Composable
 fun SatelliteHoleMap(
@@ -67,11 +78,22 @@ fun SatelliteHoleMap(
     userLat: Double?,
     userLng: Double?,
     units: Units,
+    clubRangeM: Double? = null,
+    clubLabel: String? = null,
     modifier: Modifier = Modifier
 ) {
     val tee = LatLng(hole.teeLat, hole.teeLng)
     val green = LatLng(hole.greenLat, hole.greenLng)
     val mid = LatLng((tee.latitude + green.latitude) / 2, (tee.longitude + green.longitude) / 2)
+
+    // Front / Center / Back: se proyectan sobre el eje tee→green según la
+    // profundidad del green (greenDepthM), igual que la bandera de la pantalla.
+    val brgTeeGreen = bearingBetween(tee.latitude, tee.longitude, green.latitude, green.longitude)
+    val half = hole.greenDepthM / 2.0
+    val frontPt = destinationPoint(green.latitude, green.longitude, (brgTeeGreen + 180.0) % 360.0, half)
+    val backPt = destinationPoint(green.latitude, green.longitude, brgTeeGreen, half)
+    val front = LatLng(frontPt.first, frontPt.second)
+    val back = LatLng(backPt.first, backPt.second)
 
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(mid, 16f)
@@ -79,15 +101,20 @@ fun SatelliteHoleMap(
     var measure by remember(hole.number) { mutableStateOf<LatLng?>(null) }
     var mapLoaded by remember { mutableStateOf(false) }
 
-    // Encuadra tee↔green cuando el mapa está listo (o al cambiar de hoyo). El SDK
-    // calcula el zoom según el tamaño real de la vista, así que sale bien en
-    // cualquier pantalla. Norte arriba; el usuario puede rotar con dos dedos.
+    // Encuadra tee↔green y luego rota a "green arriba". El zoom lo calcula el SDK
+    // según el tamaño real de la vista, así sale bien en cualquier pantalla.
     LaunchedEffect(hole.number, mapLoaded) {
         if (mapLoaded) {
             val bounds = LatLngBounds.builder().include(tee).include(green).build()
             runCatching {
+                cameraPositionState.animate(CameraUpdateFactory.newLatLngBounds(bounds, 170), 450)
+                val z = (cameraPositionState.position.zoom - 0.35f).coerceAtLeast(1f)
                 cameraPositionState.animate(
-                    CameraUpdateFactory.newLatLngBounds(bounds, 150), 650
+                    CameraUpdateFactory.newCameraPosition(
+                        CameraPosition.Builder()
+                            .target(mid).zoom(z).bearing(brgTeeGreen.toFloat()).build()
+                    ),
+                    450
                 )
             }
         }
@@ -99,6 +126,12 @@ fun SatelliteHoleMap(
 
     fun fmt(m: Double): String = if (units == Units.YARDS)
         "${metersToYards(m).roundToInt()} yd" else "${m.roundToInt()} m"
+    fun fmtN(m: Double): String = if (units == Units.YARDS)
+        "${metersToYards(m).roundToInt()}" else "${m.roundToInt()}"
+
+    val dCenter = haversineMeters(originLat, originLng, hole.greenLat, hole.greenLng)
+    val dFront = haversineMeters(originLat, originLng, front.latitude, front.longitude)
+    val dBack = haversineMeters(originLat, originLng, back.latitude, back.longitude)
 
     Box(modifier) {
         GoogleMap(
@@ -118,12 +151,43 @@ fun SatelliteHoleMap(
             onMapLoaded = { mapLoaded = true },
             onMapClick = { latLng -> measure = latLng }
         ) {
+            // Anillos de distancia desde tu posición (solo los que caen antes del
+            // green, para no saturar) + anillo del palo sugerido en dorado.
+            if (userLat != null && userLng != null) {
+                val targets = if (units == Units.YARDS)
+                    listOf(100.0, 150.0, 200.0).map { yardsToMeters(it) }
+                else listOf(100.0, 150.0, 200.0)
+                targets.forEach { rM ->
+                    if (rM < dCenter - 5) {
+                        Circle(
+                            center = origin, radius = rM,
+                            strokeColor = RingWhite, strokeWidth = 3f,
+                            strokePattern = listOf(Dash(22f), Gap(16f)),
+                            fillColor = Color.Transparent
+                        )
+                    }
+                }
+                clubRangeM?.let { rM ->
+                    if (rM in 20.0..350.0) {
+                        Circle(
+                            center = origin, radius = rM,
+                            strokeColor = ClubGold, strokeWidth = 5f,
+                            fillColor = Color.Transparent
+                        )
+                    }
+                }
+            }
+
+            // Front / Center / Back del green.
             Marker(
                 state = rememberMarkerState(key = "green-${hole.number}", position = green),
-                title = "Green",
-                snippet = fmt(haversineMeters(originLat, originLng, hole.greenLat, hole.greenLng)),
+                title = "Green (centro)",
+                snippet = fmt(dCenter),
                 icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED)
             )
+            Circle(center = front, radius = 3.0, strokeColor = Color.White, strokeWidth = 2f, fillColor = FrontRed)
+            Circle(center = back, radius = 3.0, strokeColor = Color.White, strokeWidth = 2f, fillColor = BackBlue)
+
             Marker(
                 state = rememberMarkerState(key = "tee-${hole.number}", position = tee),
                 title = "Tee ${hole.number} · par ${hole.par}",
@@ -165,14 +229,16 @@ fun SatelliteHoleMap(
             }
         }
 
-        // Pastilla de distancia siempre visible abajo.
+        // Pastilla de distancia siempre visible abajo: al medir muestra el layup,
+        // si no muestra Front / Center / Back del green.
+        val unit = if (units == Units.YARDS) "yd" else "m"
         val label = measure.let { m ->
             if (m != null) {
                 val d1 = haversineMeters(originLat, originLng, m.latitude, m.longitude)
                 val d2 = haversineMeters(m.latitude, m.longitude, hole.greenLat, hole.greenLng)
                 "${fmt(d1)}  →  green ${fmt(d2)}"
             } else {
-                "Green ${fmt(haversineMeters(originLat, originLng, hole.greenLat, hole.greenLng))}  ·  toca para medir"
+                "F ${fmtN(dFront)} · C ${fmtN(dCenter)} · B ${fmtN(dBack)} $unit"
             }
         }
         Surface(
@@ -189,6 +255,25 @@ fun SatelliteHoleMap(
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 7.dp)
             )
+        }
+
+        // Etiqueta del palo sugerido (arriba, junto al anillo dorado).
+        if (measure == null && clubLabel != null && userLat != null && userLng != null) {
+            Surface(
+                color = Color(0xE6B8860B),
+                shape = RoundedCornerShape(50),
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 10.dp, bottom = 12.dp)
+            ) {
+                Text(
+                    "🏌 $clubLabel",
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp)
+                )
+            }
         }
 
         if (measure != null) {

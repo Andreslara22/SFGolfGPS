@@ -17,7 +17,7 @@ embebidos localmente. Funciona sin internet.
 
 ## Funciones
 - **Distancia en tiempo real** de tu posición al centro del green (fórmula de Haversine), en número gigante legible a pleno sol.
-- **Vista satelital opcional** 🛰: además de la ilustración por hoyo (que funciona sin internet), un botón sobre el mapa alterna a la **vista satelital real de Google Maps** con el mismo overlay (tu posición, línea al green con la distancia y cursor de medición). Un toque vuelve a la ilustración de siempre. Se activa solo si el proyecto tiene una llave de Maps (ver más abajo); sin llave, la app sigue 100% offline con la ilustración.
+- **Vista satelital opcional** 🛰: además de la ilustración por hoyo (que funciona sin internet), un botón sobre el mapa alterna a la **vista satelital real de Google Maps**, orientada "green arriba" como la ilustración. Trae extras de rangefinder: puntos **Front / Center / Back** del green con sus distancias, **anillos de distancia** desde tu posición (100/150/200) para planear layups y el **anillo del palo sugerido** (hasta dónde llega tu palo), además de tu posición, la línea al green y el cursor de medición. Un toque vuelve a la ilustración de siempre. Se activa solo si el proyecto tiene una llave de Maps (ver más abajo); sin llave, la app sigue 100% offline con la ilustración.
 - **Cursor de medición en el mapa**: toca cualquier punto del hoyo y verás la distancia de tu posición (o del tee) a ese punto **y** de ese punto al green — ideal para planear layups. Toca el marcador para quitarlo. Funciona igual en la ilustración y en la vista satelital.
 - **Front / Center / Back reales**: cada green tiene su profundidad (`greenDepthM` en `CourseData.kt`, afinable por hoyo) y las posiciones de bandera roja/blanca/azul se calculan proporcionalmente a ella.
 - **"Plays like" por elevación**: la app aprende la elevación de cada green automáticamente cuando lo pisas con el GPS activo (autocalibración con media móvil, persiste entre rondas). Después de una ronda, los tiros cuesta arriba/abajo muestran la distancia efectiva y el palo sugerido la usa. Estado y reset en Settings.
@@ -33,7 +33,7 @@ embebidos localmente. Funciona sin internet.
 - **Tema oscuro verde** (fairway) + tema claro + modo sistema.
 - **Yardas / metros** configurables.
 - **Wear OS mejorado**: F/C/B alrededor de la distancia grande, contador de putts y resumen de ronda ("TOTAL 42 · +6 · thru 9") directo en el reloj, con scroll para pantallas chicas. Trae **complicación de carátula** (hoyo y golpes, un toque abre la app) además del Tile.
-- Pantalla siempre encendida durante la ronda.
+- **Ahorro de batería** 🔋: el GPS solo trabaja en la pantalla Range (se apaga en Score/Stats/Players/Settings), baja el ritmo cuando estás quieto y sube al caminar. El modo **Ahorro** (Settings → Batería) espacia aún más las lecturas. La pantalla se mantiene encendida solo mientras estás en Range.
 - Golpes y ajustes se guardan aunque cierres la app (SharedPreferences).
 
 ## Cómo compilar
@@ -92,7 +92,8 @@ ronda y con el botón "Respaldar ahora"; "Restaurar" lo baja en otro teléfono.
 
 ## Notas técnicas
 - `minSdk 26` (Android 8.0+), `targetSdk 34`.
-- GPS: `GPS_PROVIDER`, actualización cada 1 s / 1 m.
+- GPS: `GPS_PROVIDER` adaptativo — 1 s en movimiento / 6 s quieto (modo Ahorro
+  2 s / 12 s con filtro de 3 m). Solo activo en la pantalla Range.
 - Datos del campo en `CourseData.kt` (18 hoyos, par 72). Si algún día ajustas
   coordenadas de greens/tees, edita solo ese archivo.
 - El **stroke index** (ventaja) de cada hoyo y el **rating/slope** para el

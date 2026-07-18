@@ -191,6 +191,11 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
     var themeMode by mutableStateOf(ThemeMode.SYSTEM)
     // Vista del mapa del hoyo: ilustración (default) o satélite (Google Maps).
     var mapView by mutableStateOf(MapView.ILLUSTRATION)
+    // Ahorro de batería: baja el ritmo del GPS (más segundos entre lecturas).
+    var batterySaver by mutableStateOf(false)
+    // ¿El usuario está en la pantalla Range? Solo ahí corre el GPS y se mantiene
+    // la pantalla encendida; en el resto se apaga el GPS para ahorrar batería.
+    var onRangeScreen by mutableStateOf(false)
 
     // --- Juegos (Skins / Match Play / Stableford): opcionales, apagados
     // hasta que el usuario los active con el botón del Scorecard. ---
@@ -745,6 +750,7 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
     fun setUnitsAndSave(u: Units) { units = u; syncOut() }
     fun setThemeAndSave(t: ThemeMode) { themeMode = t; saveState() }
     fun setMapViewAndSave(m: MapView) { mapView = m; saveState() }
+    fun setBatterySaverAndSave(b: Boolean) { batterySaver = b; saveState() }
 
     // --- Persistence ---
     private fun saveState() {
@@ -774,6 +780,7 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
             .putString("units", units.name)
             .putString("theme", themeMode.name)
             .putString("mapView", mapView.name)
+            .putBoolean("batterySaver", batterySaver)
             .putBoolean("games", gamesEnabled)
             .putString("history", historyJson.toString())
             .putLong("stateTs", stateTs)
@@ -784,6 +791,7 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
         units = runCatching { Units.valueOf(prefs.getString("units", "YARDS")!!) }.getOrDefault(Units.YARDS)
         themeMode = runCatching { ThemeMode.valueOf(prefs.getString("theme", "SYSTEM")!!) }.getOrDefault(ThemeMode.SYSTEM)
         mapView = runCatching { MapView.valueOf(prefs.getString("mapView", "ILLUSTRATION")!!) }.getOrDefault(MapView.ILLUSTRATION)
+        batterySaver = prefs.getBoolean("batterySaver", false)
         gamesEnabled = prefs.getBoolean("games", false)
 
         prefs.getString("flags", null)?.split(",")?.mapNotNull { it.toIntOrNull() }
