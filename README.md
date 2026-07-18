@@ -17,7 +17,8 @@ embebidos localmente. Funciona sin internet.
 
 ## Funciones
 - **Distancia en tiempo real** de tu posición al centro del green (fórmula de Haversine), en número gigante legible a pleno sol.
-- **Cursor de medición en el mapa**: toca cualquier punto del hoyo y verás la distancia de tu posición (o del tee) a ese punto **y** de ese punto al green — ideal para planear layups. Toca el marcador para quitarlo.
+- **Vista satelital opcional** 🛰: además de la ilustración por hoyo (que funciona sin internet), un botón sobre el mapa alterna a la **vista satelital real de Google Maps** con el mismo overlay (tu posición, línea al green con la distancia y cursor de medición). Un toque vuelve a la ilustración de siempre. Se activa solo si el proyecto tiene una llave de Maps (ver más abajo); sin llave, la app sigue 100% offline con la ilustración.
+- **Cursor de medición en el mapa**: toca cualquier punto del hoyo y verás la distancia de tu posición (o del tee) a ese punto **y** de ese punto al green — ideal para planear layups. Toca el marcador para quitarlo. Funciona igual en la ilustración y en la vista satelital.
 - **Front / Center / Back reales**: cada green tiene su profundidad (`greenDepthM` en `CourseData.kt`, afinable por hoyo) y las posiciones de bandera roja/blanca/azul se calculan proporcionalmente a ella.
 - **"Plays like" por elevación**: la app aprende la elevación de cada green automáticamente cuando lo pisas con el GPS activo (autocalibración con media móvil, persiste entre rondas). Después de una ronda, los tiros cuesta arriba/abajo muestran la distancia efectiva y el palo sugerido la usa. Estado y reset en Settings.
 - **Detección automática de hoyo** por el tee más cercano, con botones ◀ / ▶ para cambio manual y botón AUTO para volver.
@@ -68,6 +69,24 @@ respaldo del historial ya están integrados con **Firebase**, pero la sección d
    ```
 
 Sin el json, la app compila y funciona 100% local (sin sección de cuenta).
+
+## Vista satelital (opcional)
+
+La vista satelital usa **Google Maps** y necesita una llave de API. Como el repo
+es público, la llave **no se versiona**; la app la lee al compilar de
+`signing/maps-api-key.txt` (o de la propiedad de Gradle `-PMAPS_API_KEY=...`).
+
+1. En https://console.cloud.google.com crea (o reutiliza) un proyecto y habilita
+   **Maps SDK for Android**.
+2. **APIs y servicios → Credenciales → Crear credenciales → Clave de API**.
+   Restríngela a Android (nombre de paquete `mx.clubsanfrancisco.golfgps` y la
+   huella SHA-1 de tu llave de firma) para que no la usen otros.
+3. Guarda la clave en **`signing/maps-api-key.txt`** (una sola línea) y compila.
+   El botón 🛰 aparece en el mapa y en *Settings → Vista del mapa*.
+
+Sin la llave, `signing/maps-api-key.txt` simplemente no existe: la app compila
+igual y usa la ilustración por hoyo (sin internet). En el CI puedes inyectarla
+como secreto y escribir el archivo antes del build, igual que la llave de firma.
 El respaldo (jugadores, palos, historial, elevaciones) se sube al cerrar cada
 ronda y con el botón "Respaldar ahora"; "Restaurar" lo baja en otro teléfono.
 

@@ -13,6 +13,19 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
+
+        // Llave de Google Maps para la VISTA SATELITAL (opcional). El repo es
+        // público, así que la llave NO se versiona: se lee de
+        // `signing/maps-api-key.txt` (o de la propiedad de Gradle MAPS_API_KEY).
+        // Sin llave la app compila y funciona igual: la vista satelital queda
+        // deshabilitada y el mapa usa la ilustración de siempre.
+        val mapsKeyFile = rootProject.file("signing/maps-api-key.txt")
+        val mapsKey = when {
+            mapsKeyFile.exists() -> mapsKeyFile.readText().trim()
+            project.hasProperty("MAPS_API_KEY") -> project.property("MAPS_API_KEY").toString()
+            else -> ""
+        }
+        manifestPlaceholders["MAPS_API_KEY"] = mapsKey
     }
 
     // Llave de firma FIJA (versionada en el repo): permite actualizar la app
@@ -69,6 +82,10 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("com.google.android.gms:play-services-wearable:18.1.0")
+    // Vista satelital del hoyo (Google Maps en Compose). Solo se muestra si el
+    // usuario la activa Y hay llave de Maps configurada; si no, cae en la ilustración.
+    implementation("com.google.android.gms:play-services-maps:18.2.0")
+    implementation("com.google.maps.android:maps-compose:4.4.1")
     // Cuenta opcional + respaldo en la nube (se activa al agregar google-services.json)
     implementation(platform("com.google.firebase:firebase-bom:32.7.4"))
     implementation("com.google.firebase:firebase-auth-ktx")

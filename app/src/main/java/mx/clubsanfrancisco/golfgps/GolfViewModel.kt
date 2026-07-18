@@ -35,6 +35,7 @@ private const val SEP = ""
 
 enum class Units { YARDS, METERS }
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
+enum class MapView { ILLUSTRATION, SATELLITE }
 
 class Player(
     name: String,
@@ -188,6 +189,8 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
     // --- Settings ---
     var units by mutableStateOf(Units.YARDS)
     var themeMode by mutableStateOf(ThemeMode.SYSTEM)
+    // Vista del mapa del hoyo: ilustración (default) o satélite (Google Maps).
+    var mapView by mutableStateOf(MapView.ILLUSTRATION)
 
     // --- Juegos (Skins / Match Play / Stableford): opcionales, apagados
     // hasta que el usuario los active con el botón del Scorecard. ---
@@ -741,6 +744,7 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
 
     fun setUnitsAndSave(u: Units) { units = u; syncOut() }
     fun setThemeAndSave(t: ThemeMode) { themeMode = t; saveState() }
+    fun setMapViewAndSave(m: MapView) { mapView = m; saveState() }
 
     // --- Persistence ---
     private fun saveState() {
@@ -769,6 +773,7 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
             .putString("flags", flags.joinToString(","))
             .putString("units", units.name)
             .putString("theme", themeMode.name)
+            .putString("mapView", mapView.name)
             .putBoolean("games", gamesEnabled)
             .putString("history", historyJson.toString())
             .putLong("stateTs", stateTs)
@@ -778,6 +783,7 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
     private fun loadState() {
         units = runCatching { Units.valueOf(prefs.getString("units", "YARDS")!!) }.getOrDefault(Units.YARDS)
         themeMode = runCatching { ThemeMode.valueOf(prefs.getString("theme", "SYSTEM")!!) }.getOrDefault(ThemeMode.SYSTEM)
+        mapView = runCatching { MapView.valueOf(prefs.getString("mapView", "ILLUSTRATION")!!) }.getOrDefault(MapView.ILLUSTRATION)
         gamesEnabled = prefs.getBoolean("games", false)
 
         prefs.getString("flags", null)?.split(",")?.mapNotNull { it.toIntOrNull() }

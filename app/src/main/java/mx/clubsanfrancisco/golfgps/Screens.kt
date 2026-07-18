@@ -105,6 +105,55 @@ fun GolfApp(vm: GolfViewModel, onRequestPermission: () -> Unit) {
 
 // ---------------------------------------------------------------- Range (GPS)
 
+/**
+ * Mapa del hoyo con conmutador de vista. Si hay llave de Maps configurada,
+ * un botón alterna entre la ilustración de siempre y la vista satelital real
+ * (un toque para volver a la anterior). Sin llave solo se ve la ilustración.
+ */
+@Composable
+private fun HoleMapSection(vm: GolfViewModel, hole: Hole, flag: Int) {
+    val context = LocalContext.current
+    val satelliteAvailable = remember { mapsApiKeyPresent(context) }
+    val useSatellite = satelliteAvailable && vm.mapView == MapView.SATELLITE
+
+    Box(Modifier.fillMaxWidth()) {
+        if (useSatellite) {
+            Card(
+                modifier = Modifier.fillMaxWidth().height(320.dp),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                SatelliteHoleMap(hole, vm.userLat, vm.userLng, vm.units, Modifier.fillMaxSize())
+            }
+        } else {
+            HoleMapCard(hole, vm.userLat, vm.userLng, vm.units, flag)
+        }
+
+        if (satelliteAvailable) {
+            Surface(
+                color = Color(0xCC1B3A2E),
+                shape = RoundedCornerShape(50),
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(10.dp)
+                    .clickable {
+                        vm.setMapViewAndSave(
+                            if (useSatellite) MapView.ILLUSTRATION else MapView.SATELLITE
+                        )
+                    }
+            ) {
+                Text(
+                    if (useSatellite) "🎨 Ilustración" else "🛰 Satélite",
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun RangeScreen(vm: GolfViewModel, onRequestPermission: () -> Unit) {
     val hole = vm.currentHole
@@ -324,7 +373,7 @@ private fun RangeScreen(vm: GolfViewModel, onRequestPermission: () -> Unit) {
                 Spacer(Modifier.height(12.dp))
             }
 
-            HoleMapCard(hole, vm.userLat, vm.userLng, vm.units, flag)
+            HoleMapSection(vm, hole, flag)
 
             Spacer(Modifier.height(12.dp))
 
@@ -1688,6 +1737,7 @@ private fun PlayersScreen(vm: GolfViewModel) {
 @Composable
 private fun SettingsScreen(vm: GolfViewModel) {
     var showResetDialog by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
     LazyColumn(Modifier.fillMaxSize().padding(16.dp)) {
         item {
@@ -1708,6 +1758,36 @@ private fun SettingsScreen(vm: GolfViewModel) {
                 ChoiceButton("System", vm.themeMode == ThemeMode.SYSTEM) { vm.setThemeAndSave(ThemeMode.SYSTEM) }
                 ChoiceButton("Light", vm.themeMode == ThemeMode.LIGHT) { vm.setThemeAndSave(ThemeMode.LIGHT) }
                 ChoiceButton("Dark", vm.themeMode == ThemeMode.DARK) { vm.setThemeAndSave(ThemeMode.DARK) }
+            }
+
+            Spacer(Modifier.height(22.dp))
+            Text("Vista del mapa", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(8.dp))
+            val satelliteAvailable = remember { mapsApiKeyPresent(context) }
+            if (satelliteAvailable) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ChoiceButton("🎨 Ilustración", vm.mapView == MapView.ILLUSTRATION) {
+                        vm.setMapViewAndSave(MapView.ILLUSTRATION)
+                    }
+                    ChoiceButton("🛰 Satélite", vm.mapView == MapView.SATELLITE) {
+                        vm.setMapViewAndSave(MapView.SATELLITE)
+                    }
+                }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "La vista satelital usa imágenes aéreas de Google Maps (requiere internet). " +
+                    "También puedes alternar con el botón sobre el mapa.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                Text(
+                    "Ilustración por hoyo (funciona sin internet). Para habilitar la vista " +
+                    "satelital de Google Maps, agrega una llave de Maps al proyecto " +
+                    "(ver README).",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
 
             Spacer(Modifier.height(22.dp))
