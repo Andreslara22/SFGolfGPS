@@ -86,6 +86,27 @@ fun haversineMeters(lat1: Double, lng1: Double, lat2: Double, lng2: Double): Dou
 }
 
 fun metersToYards(m: Double): Double = m * 1.0936133
+fun yardsToMeters(y: Double): Double = y / 1.0936133
+
+/** Rumbo inicial (grados, 0..360, sentido horario desde el norte) de A a B. */
+fun bearingBetween(lat1: Double, lng1: Double, lat2: Double, lng2: Double): Double {
+    val p1 = Math.toRadians(lat1); val p2 = Math.toRadians(lat2)
+    val dLng = Math.toRadians(lng2 - lng1)
+    val y = sin(dLng) * cos(p2)
+    val x = cos(p1) * sin(p2) - sin(p1) * cos(p2) * cos(dLng)
+    return (Math.toDegrees(atan2(y, x)) + 360.0) % 360.0
+}
+
+/** Punto a `distM` metros de (lat,lng) siguiendo el rumbo `bearingDeg`. */
+fun destinationPoint(lat: Double, lng: Double, bearingDeg: Double, distM: Double): Pair<Double, Double> {
+    val r = 6371000.0
+    val d = distM / r
+    val t = Math.toRadians(bearingDeg)
+    val p1 = Math.toRadians(lat); val l1 = Math.toRadians(lng)
+    val p2 = kotlin.math.asin(sin(p1) * cos(d) + cos(p1) * sin(d) * cos(t))
+    val l2 = l1 + atan2(sin(t) * sin(d) * cos(p1), cos(d) - sin(p1) * sin(p2))
+    return Math.toDegrees(p2) to Math.toDegrees(l2)
+}
 
 /** Recomendación de palo según distancia en yardas al centro del green. */
 fun recommendedClub(yards: Double): String = when {

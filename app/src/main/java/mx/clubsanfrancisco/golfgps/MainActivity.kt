@@ -15,7 +15,12 @@ import androidx.core.content.ContextCompat
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
@@ -26,6 +31,7 @@ class MainActivity : ComponentActivity() {
     private var gpsFast = true
     private var lastFix: Location? = null
     private var stillSinceMs = 0L
+    private var resumed = false
 
     private val locationListener = object : LocationListener {
         override fun onLocationChanged(location: Location) {
@@ -53,14 +59,11 @@ class MainActivity : ComponentActivity() {
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             vm.hasLocationPermission = granted
-            if (granted) startLocationUpdates()
+            syncGps()
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // Mantener la pantalla encendida durante la ronda.
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         locationManager = getSystemService(LOCATION_SERVICE) as LocationManager
 
@@ -75,6 +78,19 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        // Reacciona a: pantalla activa (Range), permiso y modo ahorro. Solo en
+        // Range mantenemos la pantalla encendida y el GPS activo; fuera de ahí
+        // se apagan ambos para ahorrar batería. Cambiar el ahorro re-registra
+        // el GPS con la nueva cadencia.
+        lifecycleScope.launch {
+            snapshotFlow {
+                Triple(vm.onRangeScreen, vm.hasLocationPermission, vm.batterySaver)
+            }.distinctUntilChanged().collect { (onRange, _, _) ->
+                keepScreenOn(onRange)
+                syncGps()
+            }
+        }
+
         requestLocation()
     }
 
@@ -85,7 +101,7 @@ class MainActivity : ComponentActivity() {
 
         if (fineGranted) {
             vm.hasLocationPermission = true
-            startLocationUpdates()
+            syncGps()
         } else {
             permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
         }
@@ -93,12 +109,25 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (vm.hasLocationPermission) startLocationUpdates()
+        resumed = true
+        syncGps()
     }
 
     override fun onPause() {
         super.onPause()
-        locationManager?.removeUpdates(locationListener)
+        resumed = false
+        stopLocationUpdates()
+    }
+
+    private fun keepScreenOn(on: Boolean) {
+        if (on) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    }
+
+    /** Enciende o apaga el GPS según pantalla activa, permiso y foreground. */
+    private fun syncGps() {
+        if (resumed && vm.onRangeScreen && vm.hasLocationPermission) startLocationUpdates()
+        else stopLocationUpdates()
     }
 
     private fun startLocationUpdates() {
@@ -106,10 +135,15 @@ class MainActivity : ComponentActivity() {
             val lm = locationManager ?: return
             lm.removeUpdates(locationListener) // avoid duplicate registrations
             if (lm.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                // Ahorro de batería: más segundos entre lecturas y filtro por
+                // distancia, para que el chip GPS no trabaje de más.
+                val moveMs = if (vm.batterySaver) 2000L else 1000L
+                val stillMs = if (vm.batterySaver) 12000L else 6000L
+                val minDist = if (vm.batterySaver) 3f else 0f
                 lm.requestLocationUpdates(
                     LocationManager.GPS_PROVIDER,
-                    if (gpsFast) 1000L else 6000L,  // en movimiento 1 s · quieto 6 s
-                    0f,
+                    if (gpsFast) moveMs else stillMs,
+                    minDist,
                     locationListener
                 )
                 lm.getLastKnownLocation(LocationManager.GPS_PROVIDER)?.let {
@@ -124,8 +158,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun stopLocationUpdates() {
+        locationManager?.removeUpdates(locationListener)
+    }
+
     override fun onDestroy() {
         super.onDestroy()
-        locationManager?.removeUpdates(locationListener)
+        stopLocationUpdates()
     }
 }

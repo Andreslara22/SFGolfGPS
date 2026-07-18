@@ -41,6 +41,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -105,8 +106,79 @@ fun GolfApp(vm: GolfViewModel, onRequestPermission: () -> Unit) {
 
 // ---------------------------------------------------------------- Range (GPS)
 
+/**
+ * Mapa del hoyo con conmutador de vista. Si hay llave de Maps configurada,
+ * un botón alterna entre la ilustración de siempre y la vista satelital real
+ * (un toque para volver a la anterior). Sin llave solo se ve la ilustración.
+ */
+@Composable
+private fun HoleMapSection(vm: GolfViewModel, hole: Hole, flag: Int, clubYards: Double?) {
+    val context = LocalContext.current
+    val satelliteAvailable = remember { mapsApiKeyPresent(context) }
+    val useSatellite = satelliteAvailable && vm.mapView == MapView.SATELLITE
+
+    // Palo sugerido para el anillo dorado de la vista satelital.
+    val activeP = vm.players.getOrNull(vm.activePlayerIndex) ?: vm.players.firstOrNull()
+    var clubRangeM: Double? = null
+    var clubLabel: String? = null
+    if (clubYards != null && activeP != null) {
+        clubLabel = clubForDistance(clubYards, activeP.clubYards)
+        if (activeP.clubYards.size == clubNames.size) {
+            val idx = clubIndexForDistance(clubYards, activeP.clubYards)
+            clubRangeM = yardsToMeters(activeP.clubYards[idx].toDouble())
+        }
+    }
+
+    Box(Modifier.fillMaxWidth()) {
+        if (useSatellite) {
+            Card(
+                modifier = Modifier.fillMaxWidth().height(320.dp),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                SatelliteHoleMap(
+                    hole, vm.userLat, vm.userLng, vm.units,
+                    clubRangeM, clubLabel, Modifier.fillMaxSize()
+                )
+            }
+        } else {
+            HoleMapCard(hole, vm.userLat, vm.userLng, vm.units, flag)
+        }
+
+        if (satelliteAvailable) {
+            Surface(
+                color = Color(0xCC1B3A2E),
+                shape = RoundedCornerShape(50),
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(10.dp)
+                    .clickable {
+                        vm.setMapViewAndSave(
+                            if (useSatellite) MapView.ILLUSTRATION else MapView.SATELLITE
+                        )
+                    }
+            ) {
+                Text(
+                    if (useSatellite) "🎨 Ilustración" else "🛰 Satélite",
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun RangeScreen(vm: GolfViewModel, onRequestPermission: () -> Unit) {
+    // Solo en esta pantalla se mantiene el GPS y la pantalla encendida; al salir
+    // se apagan para ahorrar batería (la Activity observa vm.onRangeScreen).
+    DisposableEffect(Unit) {
+        vm.onRangeScreen = true
+        onDispose { vm.onRangeScreen = false }
+    }
+
     val hole = vm.currentHole
     val distM = vm.distanceToGreenMeters()
     val yards = vm.units == Units.YARDS
@@ -324,7 +396,7 @@ private fun RangeScreen(vm: GolfViewModel, onRequestPermission: () -> Unit) {
                 Spacer(Modifier.height(12.dp))
             }
 
-            HoleMapCard(hole, vm.userLat, vm.userLng, vm.units, flag)
+            HoleMapSection(vm, hole, flag, clubYards)
 
             Spacer(Modifier.height(12.dp))
 
@@ -1688,6 +1760,7 @@ private fun PlayersScreen(vm: GolfViewModel) {
 @Composable
 private fun SettingsScreen(vm: GolfViewModel) {
     var showResetDialog by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
     LazyColumn(Modifier.fillMaxSize().padding(16.dp)) {
         item {
@@ -1709,6 +1782,52 @@ private fun SettingsScreen(vm: GolfViewModel) {
                 ChoiceButton("Light", vm.themeMode == ThemeMode.LIGHT) { vm.setThemeAndSave(ThemeMode.LIGHT) }
                 ChoiceButton("Dark", vm.themeMode == ThemeMode.DARK) { vm.setThemeAndSave(ThemeMode.DARK) }
             }
+
+            Spacer(Modifier.height(22.dp))
+            Text("Vista del mapa", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(8.dp))
+            val satelliteAvailable = remember { mapsApiKeyPresent(context) }
+            if (satelliteAvailable) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ChoiceButton("🎨 Ilustración", vm.mapView == MapView.ILLUSTRATION) {
+                        vm.setMapViewAndSave(MapView.ILLUSTRATION)
+                    }
+                    ChoiceButton("🛰 Satélite", vm.mapView == MapView.SATELLITE) {
+                        vm.setMapViewAndSave(MapView.SATELLITE)
+                    }
+                }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "La vista satelital usa imágenes aéreas de Google Maps (requiere internet). " +
+                    "También puedes alternar con el botón sobre el mapa.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                Text(
+                    "Ilustración por hoyo (funciona sin internet). Para habilitar la vista " +
+                    "satelital de Google Maps, agrega una llave de Maps al proyecto " +
+                    "(ver README).",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Spacer(Modifier.height(22.dp))
+            Text("Batería (GPS)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ChoiceButton("Normal", !vm.batterySaver) { vm.setBatterySaverAndSave(false) }
+                ChoiceButton("🔋 Ahorro", vm.batterySaver) { vm.setBatterySaverAndSave(true) }
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "El GPS solo corre en la pantalla Range y baja el ritmo cuando estás " +
+                "quieto. El modo Ahorro espacia aún más las lecturas (menos batería, " +
+                "la distancia se actualiza un poco más lento).",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
 
             Spacer(Modifier.height(22.dp))
             Text("Elevation (\"plays like\")", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)

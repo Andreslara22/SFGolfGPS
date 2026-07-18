@@ -12,6 +12,12 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.SFGolf">
 
+        <!-- Llave de Google Maps para la vista satelital. Se inyecta desde
+             build.gradle (signing/maps-api-key.txt). Vacía = satelital off. -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="${MAPS_API_KEY}" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
