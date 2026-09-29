@@ -33,6 +33,9 @@ private const val KEY_HCPS = "hcps"
 private const val KEY_TS = "ts"
 private const val SEP = ""
 
+/** Handicap de juego máximo (tope WHS). */
+const val MAX_HCP = 54
+
 enum class Units { YARDS, METERS }
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 enum class AppLanguage { ES, EN }
@@ -49,7 +52,7 @@ class Player(
     val strokes = mutableStateListOf<Int>().apply { addAll(strokes) }
     val clubYards = mutableStateListOf<Int>().apply { addAll(clubs) }
 
-    /** Handicap de juego (0-40) para Stableford; 0 = scratch. */
+    /** Handicap de juego (0-54) para Stableford; 0 = scratch. */
     var hcp by mutableStateOf(hcp)
 
     /** Putts por hoyo (0 = sin registrar). */
@@ -107,10 +110,10 @@ class Player(
      * ventaja del hoyo. Doble bogey neto o peor 0 pts · bogey 1 · par 2 ·
      * birdie 3 · eagle 4 · albatross 5. Solo hoyos con golpes anotados.
      */
-    fun stablefordPoints(): Int {
+    fun stablefordPoints(holes: IntRange = 0 until 18): Int {
         var pts = 0
         strokes.forEachIndexed { i, s ->
-            if (s > 0) {
+            if (s > 0 && i in holes) {
                 val net = s - strokesReceived(i)
                 pts += (CourseData.holes[i].par + 2 - net).coerceAtLeast(0)
             }
@@ -206,6 +209,42 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
         saveState()
     }
 
+    // --- Apuesta por puntos (ver Bets.kt): monto por jugador en cada ronda
+    // (Front 9 / Back 9 / General), reparto 1º/2º/3º en % y ganador manual
+    // opcional por ronda (-1 = automático por puntos). ---
+    var betAmount by mutableStateOf(0); private set
+    val betPayout = mutableStateListOf(60, 30, 10)
+    val betWinners = mutableStateListOf(-1, -1, -1)
+
+    fun setBetAmount(amount: Int) {
+        betAmount = amount.coerceIn(0, 1_000_000)
+        saveState()
+    }
+
+    fun setBetPayout(place: Int, pct: Int) {
+        if (place in 0..2) {
+            betPayout[place] = pct.coerceIn(0, 100)
+            saveState()
+        }
+    }
+
+    fun setBetPayoutPreset(p1: Int, p2: Int, p3: Int) {
+        betPayout[0] = p1; betPayout[1] = p2; betPayout[2] = p3
+        saveState()
+    }
+
+    /** Ganador manual de la ronda [segment] (0 front · 1 back · 2 general); -1 = automático. */
+    fun setBetWinner(segment: Int, playerIdx: Int) {
+        if (segment in 0..2) {
+            betWinners[segment] = if (playerIdx in players.indices) playerIdx else -1
+            saveState()
+        }
+    }
+
+    private fun resetBetWinners() {
+        for (i in 0..2) betWinners[i] = -1
+    }
+
     init {
         loadState()
         if (players.isEmpty()) players.add(Player(defaultPlayerName(1)))
@@ -275,7 +314,7 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
             ?.takeIf { it.size == 18 }?.forEachIndexed { i, v -> flags[i] = v }
         // El reloj no maneja handicaps: solo se aplican si vienen en el snapshot.
         dm.getString(KEY_HCPS)?.split(",")?.mapNotNull { it.toIntOrNull() }?.let { list ->
-            players.forEachIndexed { i, p -> list.getOrNull(i)?.let { p.hcp = it.coerceIn(0, 40) } }
+            players.forEachIndexed { i, p -> list.getOrNull(i)?.let { p.hcp = it.coerceIn(0, MAX_HCP) } }
         }
         stateTs = ts
         saveState()
@@ -679,6 +718,7 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
     fun removePlayer(index: Int) {
         if (players.size > 1 && index in players.indices) {
             players.removeAt(index)
+            resetBetWinners()
             if (activePlayerIndex >= players.size) activePlayerIndex = players.size - 1
             syncOut()
         }
@@ -722,7 +762,15 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
     /** Ajusta el handicap de juego de un jugador (para Stableford). */
     fun adjustHandicap(index: Int, delta: Int) {
         if (index in players.indices) {
-            players[index].hcp = (players[index].hcp + delta).coerceIn(0, 40)
+            players[index].hcp = (players[index].hcp + delta).coerceIn(0, MAX_HCP)
+            syncOut()
+        }
+    }
+
+    /** Handicap escrito a mano en Jugadores. */
+    fun setHandicap(index: Int, value: Int) {
+        if (index in players.indices) {
+            players[index].hcp = value.coerceIn(0, MAX_HCP)
             syncOut()
         }
     }
@@ -748,6 +796,7 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
             for (i in 0 until 18) { p.strokes[i] = 0; p.putts[i] = 0; p.fir[i] = -1 }
         }
         for (i in 0 until 18) flags[i] = -1
+        resetBetWinners()
         currentHoleIndex = 0
         autoDetect = false
         syncOut()
@@ -760,6 +809,7 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
             for (i in 0 until 18) { p.strokes[i] = 0; p.putts[i] = 0; p.fir[i] = -1 }
         }
         for (i in 0 until 18) flags[i] = -1
+        resetBetWinners()
         currentHoleIndex = 0
         syncOut()
     }
@@ -808,6 +858,9 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
             .putString("lang", language.name)
             .putBoolean("skinsOn", skinsEnabled)
             .putBoolean("pointsOn", pointsEnabled)
+            .putInt("betAmt", betAmount)
+            .putString("betPct", betPayout.joinToString(","))
+            .putString("betWin", betWinners.joinToString(","))
             .putString("history", historyJson.toString())
             .putLong("stateTs", stateTs)
             .apply()
@@ -820,6 +873,11 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
         val legacyGames = prefs.getBoolean("games", false)   // flag viejo, cuando era un solo botón
         skinsEnabled = prefs.getBoolean("skinsOn", legacyGames)
         pointsEnabled = prefs.getBoolean("pointsOn", legacyGames)
+        betAmount = prefs.getInt("betAmt", 0)
+        prefs.getString("betPct", null)?.split(",")?.mapNotNull { it.toIntOrNull() }
+            ?.takeIf { it.size == 3 }?.forEachIndexed { i, v -> betPayout[i] = v }
+        prefs.getString("betWin", null)?.split(",")?.mapNotNull { it.toIntOrNull() }
+            ?.takeIf { it.size == 3 }?.forEachIndexed { i, v -> betWinners[i] = v }
 
         prefs.getString("flags", null)?.split(",")?.mapNotNull { it.toIntOrNull() }
             ?.takeIf { it.size == 18 }
@@ -876,6 +934,6 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
             if (players.size < 5) players.add(Player(name, strokes, clubList, puttList, firList))
         }
         prefs.getString("hcps", null)?.split(",")?.mapNotNull { it.toIntOrNull() }
-            ?.forEachIndexed { i, v -> players.getOrNull(i)?.hcp = v.coerceIn(0, 40) }
+            ?.forEachIndexed { i, v -> players.getOrNull(i)?.hcp = v.coerceIn(0, MAX_HCP) }
     }
 }

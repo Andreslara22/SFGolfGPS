@@ -1004,25 +1004,38 @@ private fun ScorecardScreen(vm: GolfViewModel) {
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            val pts = vm.players.map { it.stablefordPoints() }
-                            val best = pts.max()
+                            // Puntos por Front 9 / Back 9 / Total, cada uno con su 👑.
+                            val segPts = Bets.segments.map { r -> vm.players.map { it.stablefordPoints(r) } }
+                            Row(Modifier.fillMaxWidth().padding(top = 4.dp)) {
+                                Spacer(Modifier.weight(1.6f))
+                                listOf("FRONT", "BACK", "TOTAL").forEach {
+                                    Text(
+                                        it, Modifier.weight(1f), fontSize = 11.sp, textAlign = TextAlign.Center,
+                                        fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
                             vm.players.forEachIndexed { i, p ->
                                 Row(
                                     Modifier.fillMaxWidth().padding(vertical = 2.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        (if (pts[i] == best && best > 0) "👑 " else "") +
-                                            p.name.take(12) + "  · hcp ${p.hcp}",
-                                        Modifier.weight(1f),
+                                        p.name.take(12) + "  · hcp ${p.hcp}",
+                                        Modifier.weight(1.6f),
                                         fontWeight = FontWeight.SemiBold,
                                         fontSize = 14.sp
                                     )
-                                    Text(
-                                        "${pts[i]} pts",
-                                        fontWeight = FontWeight.Black,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
+                                    segPts.forEach { pts ->
+                                        val best = pts.max()
+                                        Text(
+                                            (if (pts[i] == best && best > 0) "👑" else "") + "${pts[i]}",
+                                            Modifier.weight(1f),
+                                            textAlign = TextAlign.Center,
+                                            fontWeight = FontWeight.Black,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
                                 }
                             }
                             if (vm.players.all { it.hcp == 0 }) {
@@ -1056,6 +1069,8 @@ private fun ScorecardScreen(vm: GolfViewModel) {
                             }
                         }
                     }
+                    Spacer(Modifier.height(8.dp))
+                    BetsCard(vm)
                 }
                 Spacer(Modifier.height(8.dp))
 
@@ -1810,13 +1825,10 @@ private fun PlayersScreen(vm: GolfViewModel) {
                             contentPadding = PaddingValues(0.dp),
                             modifier = Modifier.size(34.dp)
                         ) { Text("−") }
-                        Text(
-                            "${player.hcp}",
-                            Modifier.width(44.dp),
-                            textAlign = TextAlign.Center,
-                            fontWeight = FontWeight.Black,
-                            fontSize = 16.sp
-                        )
+                        // Se puede escribir directo o ajustar con − / +.
+                        Spacer(Modifier.width(6.dp))
+                        NumberField(player.hcp, { vm.setHandicap(i, it) }, 64.dp, maxDigits = 2)
+                        Spacer(Modifier.width(6.dp))
                         OutlinedButton(
                             onClick = { vm.adjustHandicap(i, 1) },
                             shape = CircleShape,
