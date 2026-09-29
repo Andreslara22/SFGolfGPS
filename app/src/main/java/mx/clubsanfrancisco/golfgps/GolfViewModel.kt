@@ -216,7 +216,7 @@ class GolfViewModel(app: Application) : AndroidViewModel(app), DataClient.OnData
     val betPayout = mutableStateListOf(60, 30, 10)
     val betWinners = mutableStateListOf(-1, -1, -1)
 
-    fun setBetAmount(amount: Int) {
+    fun updateBetAmount(amount: Int) {
         betAmount = amount.coerceIn(0, 1_000_000)
         saveState()
     }

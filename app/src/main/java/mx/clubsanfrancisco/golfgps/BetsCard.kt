@@ -105,7 +105,7 @@ internal fun BetsCard(vm: GolfViewModel) {
                     Modifier.weight(1f),
                     fontSize = 14.sp
                 )
-                NumberField(vm.betAmount, { vm.setBetAmount(it) }, 96.dp, maxDigits = 6)
+                NumberField(vm.betAmount, { vm.updateBetAmount(it) }, 96.dp, maxDigits = 6)
             }
             if (vm.betAmount == 0) {
                 Text(
